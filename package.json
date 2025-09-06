@@ -1,0 +1,11 @@
+{
+  "name": "toolgate",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "echo \"(root) nothing to build\"",
+    "test": "echo \"(root) nothing to test\""
+  }
+}
