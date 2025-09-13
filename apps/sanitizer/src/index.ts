@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
+import fastifyCors from '@fastify/cors';
 import { z } from 'zod';
 import { defangLinks, spotlight, analyze } from '@toolgate/core';
 
@@ -116,7 +116,7 @@ fastify.post('/v1/sanitize-context', async (request, reply) => {
 const start = async () => {
   try {
     // Register CORS
-    await fastify.register(cors as any, {
+    await fastify.register(fastifyCors as any, {
       origin: true,
       methods: ["GET","POST","PUT","DELETE","OPTIONS"],
       credentials: true,
