@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { request as undiciRequest } from 'undici';
 import { z } from 'zod';
-import { hmacSign } from '../../../packages/core/dist/index.js';
+import { hmacSign } from '@toolgate/core';
 
 const PORT = 8787;
 
@@ -17,11 +17,6 @@ const ProxyRequestSchema = z.object({
 
 const fastify = Fastify({
   logger: true,
-});
-
-// CORS
-fastify.register(cors, {
-  origin: true,
 });
 
 // Helper functions
@@ -176,6 +171,13 @@ fastify.post('/v1/proxy', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
+    // Register CORS
+    await fastify.register(cors as any, {
+      origin: true,
+      methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+      credentials: true,
+    });
+    
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     fastify.log.info(`Gateway service running on port ${PORT}`);
     fastify.log.info(`Allowed hosts: ${process.env.ALLOW_HOSTS || 'none configured'}`);
