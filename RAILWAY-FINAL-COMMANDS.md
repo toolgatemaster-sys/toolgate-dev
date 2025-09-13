@@ -9,7 +9,11 @@ La configuración actual del proyecto está correcta:
 - ✅ `apps/web/next.config.mjs` - `transpilePackages: ['@toolgate/core']`
 - ✅ Build de `@toolgate/core` funciona correctamente
 - ✅ Build de `apps/web` funciona correctamente
+- ✅ Build de `apps/gateway` funciona correctamente
+- ✅ Build de `apps/sanitizer` funciona correctamente
+- ✅ Build de `apps/collector` funciona correctamente
 - ✅ Errores de TypeScript corregidos
+- ✅ Imports corregidos para usar rutas relativas a `@toolgate/core`
 
 ## Comandos para Railway
 

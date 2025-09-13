@@ -1,8 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { request } from 'undici';
+import { request as undiciRequest } from 'undici';
 import { z } from 'zod';
-import { hmacSign } from '@toolgate/core';
+import { hmacSign } from '../../../packages/core/src/index.js';
 
 const PORT = 8787;
 
@@ -51,13 +51,13 @@ async function emitEvent(
   }
 ) {
   try {
-    await request(`${collectorUrl}/v1/events`, {
+    await undiciRequest(`${collectorUrl}/v1/events`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(event),
     });
   } catch (error) {
-    fastify.log.error('Failed to emit event to collector:', error);
+    fastify.log.error(`Failed to emit event to collector: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -119,7 +119,7 @@ fastify.post('/v1/proxy', async (request, reply) => {
     };
     
     // Make proxy request
-    const proxyResponse = await request(url, {
+    const proxyResponse = await undiciRequest(url as string, {
       method,
       headers: proxyHeaders,
       body: body || undefined,

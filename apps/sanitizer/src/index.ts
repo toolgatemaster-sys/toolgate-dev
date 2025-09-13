@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { defangLinks, spotlight, analyze } from '@toolgate/core';
+import { defangLinks, spotlight, analyze } from '../../../packages/core/src/index.js';
 
 const PORT = 8786;
 
@@ -84,7 +84,7 @@ fastify.post('/v1/sanitize-context', async (request, reply) => {
     // Apply spotlight if requested
     let spotlighted = '';
     if (enableSpotlight) {
-      spotlighted = spotlight(cleanText);
+      spotlighted = spotlight("user", cleanText);
     }
     
     // Calculate risk score
