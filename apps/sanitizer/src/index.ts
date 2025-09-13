@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import fastifyCors from '@fastify/cors';
+import cors from '@fastify/cors';
 import { z } from 'zod';
 import { defangLinks, spotlight, analyze } from '@toolgate/core';
 
@@ -15,6 +15,13 @@ const SanitizeRequestSchema = z.object({
 
 const fastify = Fastify({
   logger: true,
+});
+
+// Register CORS before routes
+await fastify.register(cors, {
+  origin: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
 });
 
 // Detection patterns
@@ -115,15 +122,9 @@ fastify.post('/v1/sanitize-context', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    // Register CORS
-    await fastify.register(fastifyCors as any, {
-      origin: true,
-      methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-      credentials: true,
-    });
-    
-    await fastify.listen({ port: PORT, host: '0.0.0.0' });
-    fastify.log.info(`Sanitizer service running on port ${PORT}`);
+    const port = Number(process.env.PORT) || PORT;
+    await fastify.listen({ host: '0.0.0.0', port });
+    console.log('sanitizer listening on', port);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
