@@ -1,0 +1,27 @@
+version: 1
+
+egress:
+  read_only: true
+  allow_domains:
+    - internal.local
+    - httpbin.org
+
+approvals:
+  rules:
+    - id: write-to-internal-storage
+      when:
+        method: POST
+        url: ^https?://internal\.local/v1/storage/put$
+        risk_score_gte: 60
+      require: human_confirmation
+
+risk:
+  detectors:
+    - ignore_previous
+    - developer_mode
+    - hidden_html
+    - suspicious_links
+
+thresholds:
+  deny: 80
+  degrade_tools: 60

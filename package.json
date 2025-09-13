@@ -5,7 +5,14 @@
   "packageManager": "pnpm@9.0.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "echo \"(root) nothing to build\"",
-    "test": "echo \"(root) nothing to test\""
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev": "./scripts/dev-all.sh",
+    "dev:collector": "cd apps/collector && pnpm dev",
+    "dev:gateway": "cd apps/gateway && pnpm dev", 
+    "dev:sanitizer": "cd apps/sanitizer && pnpm dev",
+    "dev:web": "cd apps/web && pnpm dev",
+    "test:services": "./scripts/test-services.sh",
+    "install:all": "pnpm install"
   }
 }

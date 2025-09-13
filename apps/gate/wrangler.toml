@@ -1,0 +1,6 @@
+name = "toolgate-gate"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+[vars]
+HMAC_KEY = "dev_secret_change_me"
