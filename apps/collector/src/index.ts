@@ -100,6 +100,11 @@ fastify.post('/v1/events', async (request, reply) => {
       eventData.riskScore || null,
     ];
     
+    if (!pool) {
+      reply.code(503);
+      return { error: 'Database not available' };
+    }
+    
     const result = await pool.query(query, values);
     
     reply.code(201);
@@ -135,6 +140,11 @@ fastify.get('/v1/traces/:id', async (request, reply) => {
       WHERE trace_id = $1 
       ORDER BY ts ASC
     `;
+    
+    if (!pool) {
+      reply.code(503);
+      return { error: 'Database not available' };
+    }
     
     const result = await pool.query(query, [id]);
     
@@ -174,8 +184,12 @@ fastify.get('/v1/traces/:id', async (request, reply) => {
 const start = async () => {
   try {
     // Test database connection
-    await pool.query('SELECT 1');
-    fastify.log.info('Database connected');
+    if (pool) {
+      await pool.query('SELECT 1');
+      fastify.log.info('Database connected');
+    } else {
+      fastify.log.warn('Database not available - running in mock mode');
+    }
     
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     fastify.log.info(`Collector service running on port ${PORT}`);
