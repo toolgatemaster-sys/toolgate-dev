@@ -1,3 +1,7 @@
+// Fuerza a Node a resolver IPv4 primero (evita ENETUNREACH por IPv6)
+import { setDefaultResultOrder } from "node:dns";
+setDefaultResultOrder("ipv4first");
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Pool } from 'pg';
@@ -26,9 +30,27 @@ const EventSchema = z.object({
 });
 
 // Database setup
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+let pool: Pool | null = null;
+
+if (process.env.DATABASE_URL) {
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { 
+        rejectUnauthorized: false  // Permite certificados auto-firmados de Supabase
+      },
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+    });
+    console.log('✅ Database connection initialized');
+  } catch (error) {
+    console.warn('⚠️ Database connection failed:', error instanceof Error ? error.message : String(error));
+    console.log('📝 Collector will run in mock mode (no persistence)');
+    pool = null;
+  }
+} else {
+  console.log('📝 DATABASE_URL not set, running in mock mode (no persistence)');
+}
 
 const fastify = Fastify({
   logger: true,

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { request as undiciRequest } from 'undici';
 import { z } from 'zod';
-import { hmacSign } from '../../../packages/core/src/index.js';
+import { hmacSign } from '../../../packages/core/dist/index.js';
 
 const PORT = 8787;
 
