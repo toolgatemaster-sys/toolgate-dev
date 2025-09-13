@@ -1,8 +1,7 @@
 {
   "name": "@toolgate/sanitizer",
   "version": "0.0.1",
-  "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

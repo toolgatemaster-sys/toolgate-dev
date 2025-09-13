@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { z } from 'zod';
-import { defangLinks, spotlight, analyze } from '../../../packages/core/src/index.js';
+import { defangLinks, spotlight, analyze } from '../../../packages/core/dist/index.js';
 
 const PORT = 8786;
 
