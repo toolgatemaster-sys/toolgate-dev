@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import { Pool } from "pg"; // <- ahora con tipos
 import type { Storage } from "./storage.js";
 import type { ToolgateEvent, TraceResponse } from "./types.js";
 import { createTableIfNotExists, insertEventSQL, selectTraceSQL } from "./sql.js";
+
+type Row = {
+  event_id: string;
+  trace_id: string;
+  type: string;
+  ts: string | Date;
+  attrs: unknown;
+};
 
 export class PgStorage implements Storage {
   private pool: Pool;
@@ -44,13 +52,13 @@ export class PgStorage implements Storage {
   async getTrace(traceId: string): Promise<TraceResponse> {
     const client = await this.pool.connect();
     try {
-      const res = await client.query(selectTraceSQL, [traceId]);
-      const events = res.rows.map((r) => ({
+      const res = await client.query<Row>(selectTraceSQL, [traceId]);
+      const events = res.rows.map((r: Row) => ({
         eventId: r.event_id,
         traceId: r.trace_id,
         type: r.type,
         ts: new Date(r.ts).toISOString(),
-        attrs: r.attrs ?? {}
+        attrs: (r as Row).attrs ?? {}
       }));
       return { traceId, events };
     } finally {
