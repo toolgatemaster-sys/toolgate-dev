@@ -1,190 +1,117 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import { request as undiciRequest } from 'undici';
-import { z } from 'zod';
-import { hmacSign } from '@toolgate/core';
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { createHmac } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 
-const PORT = 8787;
-
-// Schema validation
-const ProxyRequestSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']),
-  url: z.string().url(),
-  headers: z.record(z.string()).default({}),
-  body: z.string().optional(),
-  traceId: z.string(),
-});
-
-const fastify = Fastify({
-  logger: true,
-});
-
-// Helper functions
-function isHostAllowed(url: string, allowedHosts: string[]): boolean {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-    return allowedHosts.some(allowed => {
-      if (allowed.includes('*')) {
-        const pattern = allowed.replace(/\*/g, '.*');
-        return new RegExp(`^${pattern}$`).test(hostname);
-      }
-      return hostname === allowed || hostname.endsWith(`.${allowed}`);
-    });
-  } catch {
-    return false;
-  }
+// ESM Node18 → fetch global OK. Timeout manual con AbortController.
+function withTimeout(ms: number) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms).unref();
+  return { signal: c.signal, cancel: () => clearTimeout(t) };
 }
 
-async function emitEvent(
-  collectorUrl: string,
-  event: {
-    traceId: string;
-    type: string;
-    ts: string;
-    attrs: Record<string, any>;
-  }
-) {
-  try {
-    await undiciRequest(`${collectorUrl}/v1/events`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(event),
-    });
-  } catch (error) {
-    fastify.log.error(`Failed to emit event to collector: ${error instanceof Error ? error.message : String(error)}`);
-  }
+function signHmac(key: string | undefined, payload: string) {
+  if (!key || key.length < 8) return null; // fallback: sin firma si no hay clave
+  return createHmac("sha256", key).update(payload).digest("hex");
 }
 
-// Health check
-fastify.get('/health', async () => {
-  return { status: 'ok', service: 'gateway' };
-});
+function hostFrom(url: string) {
+  try { return new URL(url).hostname.toLowerCase(); } catch { return ""; }
+}
 
-// POST /v1/proxy - Proxy requests with HMAC signing
-fastify.post('/v1/proxy', async (request, reply) => {
-  const startTime = Date.now();
-  
+async function emitEvent(traceId: string, body: any) {
   try {
-    const proxyData = ProxyRequestSchema.parse(request.body);
-    const { method, url, headers, body, traceId } = proxyData;
-    
-    // Check host allowlist
-    const allowedHosts = (process.env.ALLOW_HOSTS || '').split(',').map(h => h.trim());
-    
-    if (!isHostAllowed(url, allowedHosts)) {
-      const latencyMs = Date.now() - startTime;
-      
-      // Emit deny event
-      await emitEvent(process.env.TOOLGATE_COLLECTOR_URL || 'http://localhost:8785', {
+    const url = `${process.env.COLLECTOR_URL}/v1/events`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
         traceId,
-        type: 'gateway.decision',
+        type: "gate.decision",
         ts: new Date().toISOString(),
-        attrs: {
-          url,
-          method,
-          decision: 'deny',
-          reason: 'host_not_allowed',
-          allowedHosts,
-          latencyMs,
-        },
-      });
-      
-      reply.code(403);
-      return {
-        error: 'Host not allowed',
-        url,
-        allowedHosts,
-      };
+        attrs: body,
+      }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.error("[gateway] emitEvent failed", r.status, txt);
     }
-    
-    // Create HMAC signature
-    const ts = Date.now().toString();
-    const signature = await hmacSign(
-      process.env.HMAC_KEY || 'dev_secret',
-      `${method} ${url} ${traceId} ${ts}`
-    );
-    
-    // Prepare request headers
-    const proxyHeaders = {
-      ...headers,
-      'x-toolgate-sig': signature,
-      'x-toolgate-trace': traceId,
-      'x-toolgate-ts': ts,
+  } catch (e: any) {
+    console.error("[gateway] emitEvent error", e?.message || e);
+  }
+}
+
+const app = Fastify({ logger: true });
+await app.register(cors, { origin: true });
+
+app.post("/v1/proxy", async (req, reply) => {
+  const started = Date.now();
+  let decision: "allow" | "deny" = "deny";
+  let status = 0;
+  let target = "";
+
+  try {
+    // 1) Validación básica
+    const body = req.body as {
+      method: string; url: string; headers?: Record<string, string>;
+      body?: any; traceId?: string;
     };
-    
-    // Make proxy request
-    const proxyResponse = await undiciRequest(url as string, {
-      method,
-      headers: proxyHeaders,
-      body: body || undefined,
-    });
-    
-    const responseBody = await proxyResponse.body.text();
-    const latencyMs = Date.now() - startTime;
-    
-    // Emit allow event
-    await emitEvent(process.env.TOOLGATE_COLLECTOR_URL || 'http://localhost:8785', {
-      traceId,
-      type: 'gateway.decision',
-      ts: new Date().toISOString(),
-      attrs: {
-        url,
-        method,
-        decision: 'allow',
-        status: proxyResponse.statusCode,
-        latencyMs,
-      },
-    });
-    
-    // Return proxy response
-    reply.code(proxyResponse.statusCode);
-    reply.headers(proxyResponse.headers as Record<string, string>);
-    return responseBody;
-    
-  } catch (error) {
-    const latencyMs = Date.now() - startTime;
-    
-    fastify.log.error(error);
-    
-    if (error instanceof z.ZodError) {
-      reply.code(400);
-      return { error: 'Validation error', details: error.errors };
+    if (!body?.method || !body?.url) {
+      reply.code(400).send({ error: "bad_request" }); return;
     }
-    
-    // Emit error event
-    await emitEvent(process.env.TOOLGATE_COLLECTOR_URL || 'http://localhost:8785', {
-      traceId: (request.body as any)?.traceId || 'unknown',
-      type: 'gateway.error',
-      ts: new Date().toISOString(),
-      attrs: {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        latencyMs,
+    target = body.url;
+
+    // 2) Allowlist
+    const allowed = (process.env.ALLOW_HOSTS || "")
+      .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    const host = hostFrom(body.url);
+    if (!host || !allowed.includes(host)) {
+      decision = "deny"; status = 403;
+      reply.code(403).send({ allowed: false, reason: "domain-not-allowed" });
+      return;
+    }
+
+    // 3) Firma HMAC (no romper si no hay clave)
+    const ts = Date.now().toString();
+    const payload = JSON.stringify({ method: body.method, url: body.url, traceId: body.traceId || "", ts });
+    const sig = signHmac(process.env.HMAC_KEY, payload);
+
+    // 4) Proxy con timeout
+    const { signal, cancel } = withTimeout(8000);
+    const upstream = await fetch(body.url, {
+      method: body.method,
+      headers: {
+        ...(body.headers || {}),
+        ...(sig ? { "x-toolgate-sig": sig, "x-toolgate-ts": ts, "x-toolgate-trace": body.traceId || "" } : {}),
       },
+      body: body.body ? (typeof body.body === "string" ? body.body : JSON.stringify(body.body)) : undefined,
+      signal,
+    }).finally(() => cancel());
+
+    decision = "allow";
+    status = upstream.status;
+    const raw = await upstream.arrayBuffer();
+
+    // 5) Propagar status/headers básicos (filtrados)
+    const headers: Record<string, string> = {};
+    upstream.headers.forEach((v, k) => {
+      if (["content-type", "content-length"].includes(k)) headers[k] = v;
     });
-    
-    reply.code(500);
-    return { error: 'Internal server error' };
+
+    reply.code(status).headers(headers).send(Buffer.from(raw));
+  } catch (e: any) {
+    console.error("[gateway] proxy error:", e?.message || e);
+    status = 502;
+    reply.code(502).send({ error: "upstream_error" });
+  } finally {
+    const latencyMs = Date.now() - started;
+    await emitEvent((req.body as any)?.traceId || "", { decision, target, status, latencyMs });
   }
 });
 
-// Start server
-const start = async () => {
-  try {
-    // Register CORS
-    await fastify.register(cors as any, {
-      origin: true,
-      methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-      credentials: true,
-    });
-    
-    await fastify.listen({ port: PORT, host: '0.0.0.0' });
-    fastify.log.info(`Gateway service running on port ${PORT}`);
-    fastify.log.info(`Allowed hosts: ${process.env.ALLOW_HOSTS || 'none configured'}`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
+// healthcheck
+app.get("/healthz", async () => ({ ok: true }));
 
-start();
+const port = Number(process.env.PORT) || 8787;
+await app.listen({ host: "0.0.0.0", port });
+console.log("gateway listening on", port);
