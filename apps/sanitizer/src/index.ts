@@ -3,7 +3,8 @@ import cors from '@fastify/cors';
 import { z } from 'zod';
 import { defangLinks, spotlight, analyze } from '@toolgate/core';
 
-const PORT = 8786;
+const PORT = Number(process.env.PORT ?? 8080);
+const HOST = '0.0.0.0';
 
 // Schema validation
 const SanitizeRequestSchema = z.object({
@@ -122,9 +123,8 @@ fastify.post('/v1/sanitize-context', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
-    const port = Number(process.env.PORT) || PORT;
-    await fastify.listen({ host: '0.0.0.0', port });
-    console.log('sanitizer listening on', port);
+    await fastify.listen({ port: PORT, host: HOST });
+    fastify.log.info(`listening on ${HOST}:${PORT}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

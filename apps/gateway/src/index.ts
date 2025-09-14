@@ -4,7 +4,6 @@ setDefaultResultOrder("ipv4first");
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { createHmac } from "node:crypto";
-import { setTimeout as sleep } from "node:timers/promises";
 
 // ESM Node18 → fetch global OK. Timeout manual con AbortController.
 function withTimeout(ms: number) {
@@ -122,6 +121,8 @@ app.post("/v1/proxy", async (req, reply) => {
 // healthcheck
 app.get("/healthz", async () => ({ ok: true }));
 
-const port = Number(process.env.PORT) || 8787;
-await app.listen({ host: "0.0.0.0", port });
-console.log("gateway listening on", port);
+const PORT = Number(process.env.PORT ?? 8080);
+const HOST = "0.0.0.0";
+
+await app.listen({ port: PORT, host: HOST });
+app.log.info(`listening on ${HOST}:${PORT}`);

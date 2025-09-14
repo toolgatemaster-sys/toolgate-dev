@@ -7,7 +7,8 @@ import cors from '@fastify/cors';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-const PORT = 8785;
+const PORT = Number(process.env.PORT ?? 8080);
+const HOST = '0.0.0.0';
 
 // Schema validation
 const EventSchema = z.object({
@@ -191,8 +192,8 @@ const start = async () => {
       fastify.log.warn('Database not available - running in mock mode');
     }
     
-    await fastify.listen({ port: PORT, host: '0.0.0.0' });
-    fastify.log.info(`Collector service running on port ${PORT}`);
+    await fastify.listen({ port: PORT, host: HOST });
+    fastify.log.info(`listening on ${HOST}:${PORT}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
