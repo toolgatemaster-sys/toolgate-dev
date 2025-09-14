@@ -45,6 +45,13 @@ async function emitEvent(traceId: string, body: any) {
 }
 
 const app = Fastify({ logger: true });
+
+// Error handler global
+app.setErrorHandler((err, req, reply) => {
+  req.log.error({ err }, "unhandled error");
+  if (!reply.sent) reply.code(500).send({ error: "internal_error" });
+});
+
 await app.register(cors, { origin: true });
 
 app.post("/v1/proxy", async (req, reply) => {
