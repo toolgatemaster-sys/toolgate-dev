@@ -7,6 +7,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "useUnknownInCatchVariables": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"]
