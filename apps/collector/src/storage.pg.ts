@@ -8,17 +8,18 @@ type EventRow = {
   event_id: string;
   trace_id: string;
   type: string;
-  ts: Date;                // pg devuelve Date si no transformas
-  attrs: unknown;          // JSONB → unknown (nunca any)
+  ts: Date;
+  attrs: unknown;
 };
 
 export class PgStorage implements Storage {
   private readonly pool: Pool;
 
   constructor(private readonly dbURL: string) {
+    // ⚠️ Fuerza TLS con verificación laxa (evita "self-signed certificate")
     this.pool = new Pool({
       connectionString: this.dbURL,
-      ssl: { rejectUnauthorized: false }  // evita error "self-signed certificate"
+      ssl: { rejectUnauthorized: false },   // ← CLAVE
     });
   }
 
@@ -34,7 +35,6 @@ export class PgStorage implements Storage {
   async saveEvent(evt: ToolgateEvent): Promise<{ ok: true; eventId: string }> {
     const eventId = randomUUID();
     const tsISO = new Date(evt.ts).toISOString();
-
     const client = await this.pool.connect();
     try {
       await client.query(insertEventSQL, [
@@ -54,12 +54,12 @@ export class PgStorage implements Storage {
     const client = await this.pool.connect();
     try {
       const res: QueryResult<EventRow> = await client.query(selectTraceSQL, [traceId]);
-      const events: StoredEvent[] = res.rows.map((r: EventRow) => ({
+      const events: StoredEvent[] = res.rows.map((r) => ({
         eventId: r.event_id,
         traceId: r.trace_id,
         type: r.type,
         ts: new Date(r.ts).toISOString(),
-        attrs: r.attrs as Record<string, unknown>
+        attrs: r.attrs as Record<string, unknown>,  // 👈 cast explícito
       }));
       return { traceId, events };
     } finally {

@@ -20,9 +20,26 @@ const PORT = Number(PORT_STR);
 const HMAC_KEY = process.env.HMAC_KEY ?? "";
 const DATABASE_URL = process.env.DATABASE_URL;
 
-const storage: Storage = DATABASE_URL
-  ? (console.log("[collector] Usando Postgres (pooler):", obfuscate(DATABASE_URL)), new PgStorage(DATABASE_URL))
-  : (console.warn("[collector] Sin DATABASE_URL → usando memoria"), new MemoryStorage());
+let storage: Storage;
+
+async function initStorage(): Promise<void> {
+  if (process.env.DATABASE_URL) {
+    try {
+      const pg = new PgStorage(process.env.DATABASE_URL);
+      await pg.init();
+      storage = pg;
+      console.log("[collector] DB inicializada con éxito");
+      return;
+    } catch (e) {
+      console.error("[collector] DB init failed → fallback a memoria", String(e));
+    }
+  }
+  // fallback
+  const mem = new MemoryStorage();
+  await mem.init();
+  storage = mem;
+  console.warn("[collector] Usando almacenamiento EN MEMORIA");
+}
 
 const app: FastifyInstance = fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 });
 
@@ -67,7 +84,7 @@ app.get("/v1/traces/:id", async (req, reply) => {
 
 (async () => {
   try {
-    await storage.init();
+    await initStorage();
     await app.listen({ host: HOST, port: PORT });
     app.log.info(`[collector] listening on ${HOST}:${PORT}`);
   } catch (e) {
