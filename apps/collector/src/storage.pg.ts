@@ -18,7 +18,7 @@ export class PgStorage implements Storage {
   constructor(private readonly dbURL: string) {
     this.pool = new Pool({
       connectionString: this.dbURL,
-      ssl: /sslmode=require/.test(this.dbURL) ? { rejectUnauthorized: false } : undefined
+      ssl: { rejectUnauthorized: false }  // evita error "self-signed certificate"
     });
   }
 
