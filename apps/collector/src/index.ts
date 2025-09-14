@@ -14,52 +14,68 @@ const PORT_STR = process.env.PORT;
 if (!PORT_STR) { console.error("[collector] FALTA process.env.PORT"); process.exit(1); }
 const PORT = Number(PORT_STR);
 
-const SAFE_MODE = process.env.SAFE_MODE === "1";
 const HMAC_KEY = process.env.HMAC_KEY ?? "";
 const DATABASE_URL = process.env.DATABASE_URL;
 
 (async () => {
   const app = fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 });
 
-  // Siempre registra healthz ANTES de cualquier otra cosa
-  app.get("/healthz", async () => ({ ok: true, safe: SAFE_MODE }));
+  // justo después de crear `const app = fastify({ logger: true, bodyLimit: ... })`
+  const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? ""; // pon algo como "secret123" en Railway
+  let runtime = {
+    safe: process.env.SAFE_MODE === "1",   // empieza en lo que diga el env
+    storage: "memory" as "memory" | "pg"   // forzamos memoria para iniciar rápido
+  };
 
-  if (SAFE_MODE) {
-    // En SAFE_MODE no registramos parsers ni rutas extra
+  // healthz siempre disponible
+  app.get("/healthz", async () => ({ ok: true, safe: runtime.safe, storage: runtime.storage }));
+
+  // --- TOGGLES ADMIN (no requieren redeploy) ---
+  app.post("/__admin/toggle", async (req, reply) => {
+    const auth = req.headers["x-admin-token"];
+    if (!ADMIN_TOKEN || auth !== ADMIN_TOKEN) return reply.code(401).send({ ok: false });
+    const body = req.body as any;
+    if (typeof body?.safe === "boolean") runtime.safe = body.safe;
+    if (body?.storage === "memory" || body?.storage === "pg") runtime.storage = body.storage;
+    return reply.send({ ok: true, runtime });
+  });
+  app.get("/__admin/runtime", async (req, reply) => {
+    const auth = req.headers["x-admin-token"];
+    if (!ADMIN_TOKEN || auth !== ADMIN_TOKEN) return reply.code(401).send({ ok: false });
+    return reply.send({ ok: true, runtime });
+  });
+
+  // SAFE MODE: escucha solo healthz + admin y listo
+  if (runtime.safe) {
     await app.listen({ host: HOST, port: PORT });
     app.log.info(`[collector] SAFE_MODE=1 listening on ${HOST}:${PORT}`);
     process.on("SIGTERM", async () => { try { await app.close(); } finally { process.exit(0); } });
-    return; // <- ¡clave! nada más después de escuchar
+    return;
   }
 
-  // --- NO-SAFE: a partir de aquí sí registramos parser/rutas/DB ---
-  // Necesitamos raw body (string) para HMAC
+  // A partir de acá, MODO NORMAL: registra parsers/rutas y storage
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
     try { done(null, body as string); } catch (e) { done(e as Error); }
   });
 
-  // Storage con fallback
+  // selecciona storage según `runtime.storage`
   let storage: Storage;
-  try {
-    if (DATABASE_URL) {
-      const pg = new PgStorage(DATABASE_URL);
+  if (runtime.storage === "pg" && process.env.DATABASE_URL) {
+    try {
+      const pg = new PgStorage(process.env.DATABASE_URL);
       await pg.init();
       storage = pg;
       app.log.info("[collector] DB OK");
-    } else {
-      const mem = new MemoryStorage();
-      await mem.init();
-      storage = mem;
-      app.log.warn("[collector] Using in-memory storage");
+    } catch (e) {
+      app.log.error({ err: String(e) }, "[collector] DB init failed → fallback memory");
+      const mem = new MemoryStorage(); await mem.init(); storage = mem; runtime.storage = "memory";
     }
-  } catch (e) {
-    app.log.error({ err: String(e) }, "[collector] DB init failed → fallback memory");
-    const mem = new MemoryStorage();
-    await mem.init();
-    storage = mem;
+  } else {
+    const mem = new MemoryStorage(); await mem.init(); storage = mem;
+    app.log.warn("[collector] Using in-memory storage");
   }
 
-  // Rutas
+  // rutas normales
   app.post("/v1/events", async (req, reply) => {
     const raw = req.body as string | undefined;
     const sig = req.headers["x-toolgate-sig"] as string | undefined;
@@ -90,7 +106,6 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
   await app.listen({ host: HOST, port: PORT });
   app.log.info(`[collector] listening on ${HOST}:${PORT}`);
-
   process.on("SIGTERM", async () => { try { await app.close(); } finally { process.exit(0); } });
 
   function verifyHmacIfPresent(rawBody: string, headerSig: string | undefined): boolean {
