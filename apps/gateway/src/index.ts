@@ -3,7 +3,6 @@ import { setDefaultResultOrder } from "node:dns";
 setDefaultResultOrder("ipv4first");
 
 import fastify from "fastify";
-import { fetch, Headers } from "undici"; // usa undici siempre
 import { ProxyRequestSchema, type ProxyRequest } from "./types.js";
 import { makeHostAllowChecker } from "./allowlist.js";
 import { makeEventEmitter } from "./events.js";
