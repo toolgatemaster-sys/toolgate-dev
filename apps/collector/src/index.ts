@@ -30,6 +30,10 @@ const DATABASE_URL = process.env.DATABASE_URL;
   // healthz siempre disponible
   app.get("/healthz", async () => ({ ok: true, safe: runtime.safe, storage: runtime.storage }));
 
+  app.get("/", async () => {
+    return { ok: true, service: "collector" };
+  });
+
   // --- TOGGLES ADMIN (no requieren redeploy) ---
   app.post("/__admin/toggle", async (req, reply) => {
     const auth = req.headers["x-admin-token"];
