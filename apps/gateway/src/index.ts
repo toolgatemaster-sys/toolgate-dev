@@ -14,6 +14,8 @@ if (!PORT_STR) {
 }
 const PORT = Number(PORT_STR);
 
+const SAFE_MODE = process.env.SAFE_MODE === "1";
+
 // ENV requeridas/sugeridas
 const HMAC_KEY = process.env.HMAC_KEY || ""; // firma opcional hacia Collector
 const COLLECTOR_URL = process.env.COLLECTOR_URL || ""; // usar pública en debug
@@ -22,7 +24,15 @@ const ALLOW_HOSTS = process.env.ALLOW_HOSTS || ""; // ej: "httpbin.org,.example.
 const app = fastify({ logger: true });
 
 // healthz
-app.get("/healthz", async () => ({ ok: true }));
+app.get("/healthz", async () => ({ ok: true, safe: SAFE_MODE }));
+
+if (SAFE_MODE) {
+  // Arranca solo con healthz y nada más
+  await app.listen({ host: HOST, port: PORT });
+  app.log.info(`[gateway] SAFE_MODE=1 listening on ${HOST}:${PORT}`);
+  process.on("SIGTERM", async () => { try { await app.close(); } finally { process.exit(0); } });
+  // ¡NO sigas! retorna acá para no inicializar DB ni rutas extra
+}
 
 // allowlist
 const isAllowed = makeHostAllowChecker(ALLOW_HOSTS);
