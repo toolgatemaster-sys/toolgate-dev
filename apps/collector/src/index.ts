@@ -2,7 +2,7 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 
 const HOST = '0.0.0.0';
-const PORT = Number(process.env.PORT ?? 8080);
+const PORT = Number(process.env.PORT);
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -198,9 +198,10 @@ const start = async () => {
     }
     
     await fastify.listen({ host: HOST, port: PORT });
-    fastify.log.info(`collector listening on ${HOST}:${PORT}`);
+    console.log('[collector] PORT env =', process.env.PORT); // log explícito
+    console.log(`[collector] listening on ${HOST}:${PORT}`);
   } catch (err) {
-    fastify.log.error(err);
+    console.error('listen failed', err);
     process.exit(1);
   }
 };
