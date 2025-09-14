@@ -1,118 +1,121 @@
-import { setDefaultResultOrder } from 'dns';
-setDefaultResultOrder('ipv4first');
+import { setDefaultResultOrder } from "node:dns";
+setDefaultResultOrder("ipv4first");
 
-const HOST = '0.0.0.0';
-const PORT = Number(process.env.PORT ?? 8080);
+import fastify from "fastify";
+import { ProxyRequestSchema, type ProxyRequest } from "./types.js";
+import { makeHostAllowChecker } from "./allowlist.js";
+import { makeEventEmitter } from "./events.js";
 
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
+const HOST = "0.0.0.0";
+const PORT_STR = process.env.PORT;
+if (!PORT_STR) {
+  console.error("[gateway] FALTA process.env.PORT (Railway lo inyecta).");
+  process.exit(1);
+}
+const PORT = Number(PORT_STR);
 
-type ProxyBody = {
-  method?: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: unknown;
-  traceId?: string;
-};
+// ENV requeridas/sugeridas
+const HMAC_KEY = process.env.HMAC_KEY || ""; // firma opcional hacia Collector
+const COLLECTOR_URL = process.env.COLLECTOR_URL || ""; // usar pública en debug
+const ALLOW_HOSTS = process.env.ALLOW_HOSTS || ""; // ej: "httpbin.org,.example.com"
 
-const app = Fastify({ logger: true });
+const app = fastify({ logger: true });
 
-// Error handler global
-app.setErrorHandler((err, req, reply) => {
-  req.log.error({ err }, "unhandled error");
-  if (!reply.sent) reply.code(500).send({ error: "internal_error" });
+// healthz
+app.get("/healthz", async () => ({ ok: true }));
+
+// allowlist
+const isAllowed = makeHostAllowChecker(ALLOW_HOSTS);
+
+// emisor de eventos
+const events = makeEventEmitter({
+  collectorURL: COLLECTOR_URL,
+  hmacKey: HMAC_KEY,
+  logger: (o, msg) => app.log.warn(o, msg)
 });
 
-await app.register(cors, { origin: true });
-
-// Health check
-app.get('/healthz', async () => ({ ok: true }));
-
-// Carga segura de ALLOW_HOSTS
-const raw = process.env.ALLOW_HOSTS ?? '';
-const ALLOW_SET = new Set(
-  raw.split(',').map(h => h.trim().toLowerCase()).filter(Boolean)
-);
-
-function isAllowed(urlStr: string) {
-  let host: string;
-  try { host = new URL(urlStr).hostname.toLowerCase(); }
-  catch { return false; }
-  return ALLOW_SET.has(host);
-}
-
-const COLLECTOR_URL = process.env.COLLECTOR_URL!;
-const HMAC_KEY = process.env.HMAC_KEY ?? 'replace-me';
-
-// Utilidad fire-and-forget para emitir eventos
-async function emitEvent(evt: any) {
+// /v1/proxy
+app.post("/v1/proxy", async (req, reply) => {
+  let body: ProxyRequest;
   try {
-    await fetch(`${COLLECTOR_URL}/v1/events`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(evt),
-    });
-  } catch (e) {
-    console.error('emitEvent failed', e);
+    body = ProxyRequestSchema.parse(req.body);
+  } catch (e: any) {
+    return reply.code(400).send({ error: "invalid_proxy_payload", detail: String(e?.message ?? e) });
   }
-}
 
-app.post('/v1/proxy', async (req, reply) => {
-  const body = req.body as ProxyBody;
+  const { method, url, headers = {}, traceId } = body;
 
-  if (!body?.url) {
-    return reply.code(400).send({ error: 'Missing url' });
-  }
-  
-  if (!isAllowed(body.url)) {
-    await emitEvent({
-      traceId: body.traceId ?? crypto.randomUUID(),
-      type: 'gate.decision',
+  // allowlist
+  if (!isAllowed(url)) {
+    const evt = {
+      traceId,
+      type: "gate.decision",
       ts: new Date().toISOString(),
-      attrs: { allowed: false, reason: 'host_not_in_allowlist', url: body.url }
-    });
-    return reply.code(403).send({ error: 'Host not allowed' });
+      attrs: { allowed: false, reason: "domain-not-allowed", url }
+    };
+    events.emit(evt);
+    return reply.code(403).send({ allowed: false, reason: "domain-not-allowed" });
   }
 
-  const method = (body.method ?? 'GET').toUpperCase();
-  const headers = new Headers(body.headers ?? {});
-  headers.set('x-toolgate-sig', HMAC_KEY);
+  // construir request a upstream
+  const m = (method ?? "GET").toUpperCase();
+  const h = new Headers(headers);
+  // (opcional) aquí puedes sanear/filtrar headers salientes si quieres
 
   try {
-    const upstream = await fetch(body.url, {
-      method,
-      headers,
-      body: ['GET','HEAD'].includes(method) ? undefined : JSON.stringify(body.body),
+    const res = await fetch(url, {
+      method: m,
+      headers: h,
+      body: ["GET", "HEAD"].includes(m) ? undefined : serializeBody(body.body)
     });
 
-    const text = await upstream.text();
+    // copiamos status/headers y devolvemos como texto (para no romper binarios)
+    const text = await res.text();
+    for (const [k, v] of res.headers) reply.header(k, v);
+    reply.code(res.status);
 
-    // Evento al collector (no bloqueante)
-    emitEvent({
-      traceId: body.traceId ?? crypto.randomUUID(),
-      type: 'proxy.forward',
+    // evento no bloqueante
+    events.emit({
+      traceId,
+      type: "proxy.forward",
       ts: new Date().toISOString(),
-      attrs: {
-        url: body.url,
-        status: upstream.status,
-        ok: upstream.ok
-      }
+      attrs: { url, method: m, status: res.status, ok: res.ok }
     });
 
-    reply.code(upstream.status);
-    return reply.headers(Object.fromEntries(upstream.headers)).send(text);
-
+    return reply.send(text);
   } catch (err: any) {
-    // 502: upstream falló
-    emitEvent({
-      traceId: body.traceId ?? crypto.randomUUID(),
-      type: 'proxy.error',
+    // upstream error → 502
+    events.emit({
+      traceId,
+      type: "proxy.error",
       ts: new Date().toISOString(),
-      attrs: { url: body.url, message: String(err) }
+      attrs: { url, method: m, message: String(err) }
     });
-    return reply.code(502).send({ error: 'Upstream error', detail: String(err) });
+    return reply.code(502).send({ error: "upstream_error" });
   }
 });
 
-await app.listen({ host: HOST, port: PORT });
-app.log.info(`gateway listening on ${HOST}:${PORT}`);
+function serializeBody(b: unknown): string | undefined {
+  if (b == null) return undefined;
+  if (typeof b === "string") return b;
+  return JSON.stringify(b);
+}
+
+(async () => {
+  try {
+    await app.listen({ host: HOST, port: PORT });
+    app.log.info(`[gateway] listening on ${HOST}:${PORT}`);
+  } catch (e) {
+    app.log.error(e);
+    process.exit(1);
+  }
+})();
+
+// cierre limpio
+process.on("SIGTERM", async () => {
+  try {
+    await app.close();
+  } finally {
+    process.exit(0);
+  }
+});

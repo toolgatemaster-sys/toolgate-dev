@@ -1,23 +1,21 @@
 {
   "name": "@toolgate/collector",
   "version": "0.0.1",
-  "main": "dist/index.js",
+  "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "fastify": "^4.29.1",
-    "@fastify/cors": "^8.4.0",
+    "fastify": "^4.28.1",
     "pg": "^8.12.0",
-    "zod": "^3.24.1"
+    "zod": "^3.23.8",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "typescript": "^5.5.4"
   }
 }
