@@ -84,6 +84,7 @@ Cada servicio necesita sus variables específicas:
 ### Gateway
 - `HMAC_KEY`
 - `ALLOW_HOSTS`
+- `COLLECTOR_URL` (URL del collector service)
 
 ### Collector
 - `DATABASE_URL`

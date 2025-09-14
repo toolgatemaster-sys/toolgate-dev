@@ -1,14 +1,13 @@
-// Fuerza a Node a resolver IPv4 primero (evita ENETUNREACH por IPv6)
-import { setDefaultResultOrder } from "node:dns";
-setDefaultResultOrder("ipv4first");
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
+
+const HOST = '0.0.0.0';
+const PORT = Number(process.env.PORT ?? 8080);
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Pool } from 'pg';
 import { z } from 'zod';
-
-const PORT = Number(process.env.PORT ?? 8080);
-const HOST = '0.0.0.0';
 
 // Schema validation
 const EventSchema = z.object({
@@ -63,30 +62,30 @@ fastify.register(cors, {
 });
 
 // Health check
-fastify.get('/health', async () => {
-  return { status: 'ok', service: 'collector' };
-});
+fastify.get('/healthz', async () => ({ ok: true }));
 
-// POST /v1/events - Store event
-fastify.post('/v1/events', async (request, reply) => {
+// Helper function to emit events
+async function emitEvent(eventData: any) {
+  if (!pool) {
+    console.log('📝 Mock mode: would emit event', eventData);
+    return;
+  }
+
   try {
-    const eventData = EventSchema.parse(request.body);
-    
     const query = `
       INSERT INTO events (
         trace_id, type, ts, attrs, org_id, project_id, agent_id,
         event_id, parent_event_id, tool, target, action,
         latency_ms, status, decision, risk_score
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
-      ) RETURNING id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      RETURNING id
     `;
     
     const values = [
       eventData.traceId,
       eventData.type,
       eventData.ts,
-      JSON.stringify(eventData.attrs),
+      JSON.stringify(eventData.attrs || {}),
       eventData.orgId || null,
       eventData.projectId || null,
       eventData.agentId || null,
@@ -100,20 +99,28 @@ fastify.post('/v1/events', async (request, reply) => {
       eventData.decision || null,
       eventData.riskScore || null,
     ];
+
+    const result = await pool.query(query, values);
+    return { success: true, id: result.rows[0].id, eventId: result.rows[0].id };
+  } catch (error) {
+    fastify.log.error({ err: error }, 'Failed to emit event');
+    throw error;
+  }
+}
+
+// POST /v1/events - Create event
+fastify.post('/v1/events', async (request, reply) => {
+  try {
+    const eventData = EventSchema.parse(request.body);
     
     if (!pool) {
       reply.code(503);
       return { error: 'Database not available' };
     }
     
-    const result = await pool.query(query, values);
-    
+    const result = await emitEvent(eventData);
     reply.code(201);
-    return {
-      success: true,
-      id: result.rows[0].id,
-      eventId: eventData.eventId || result.rows[0].id,
-    };
+    return result;
   } catch (error) {
     fastify.log.error(error);
     
@@ -132,20 +139,18 @@ fastify.get('/v1/traces/:id', async (request, reply) => {
   try {
     const { id } = request.params as { id: string };
     
-    const query = `
-      SELECT 
-        id, event_id, parent_event_id, ts, org_id, project_id, agent_id,
-        trace_id, type, tool, target, action, latency_ms, status,
-        decision, risk_score, attrs
-      FROM events 
-      WHERE trace_id = $1 
-      ORDER BY ts ASC
-    `;
-    
     if (!pool) {
       reply.code(503);
       return { error: 'Database not available' };
     }
+    
+    const query = `
+      SELECT id, event_id, parent_event_id, ts, org_id, project_id, agent_id,
+             trace_id, type, tool, target, action, latency_ms, status, decision, risk_score, attrs
+      FROM events 
+      WHERE trace_id = $1 
+      ORDER BY ts ASC
+    `;
     
     const result = await pool.query(query, [id]);
     
@@ -172,7 +177,7 @@ fastify.get('/v1/traces/:id', async (request, reply) => {
     return {
       traceId: id,
       events,
-      count: events.length,
+      count: events.length
     };
   } catch (error) {
     fastify.log.error(error);
@@ -192,12 +197,21 @@ const start = async () => {
       fastify.log.warn('Database not available - running in mock mode');
     }
     
-    await fastify.listen({ port: PORT, host: HOST });
-    fastify.log.info(`listening on ${HOST}:${PORT}`);
+    await fastify.listen({ host: HOST, port: PORT });
+    fastify.log.info(`collector listening on ${HOST}:${PORT}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
   }
 };
+
+// Clean shutdown
+process.on('SIGTERM', async () => {
+  try { 
+    await fastify.close(); 
+  } finally { 
+    process.exit(0); 
+  }
+});
 
 start();

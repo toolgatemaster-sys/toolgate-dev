@@ -1,47 +1,19 @@
-import { setDefaultResultOrder } from "node:dns";
-setDefaultResultOrder("ipv4first");
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
 
-import Fastify from "fastify";
-import cors from "@fastify/cors";
-import { createHmac } from "node:crypto";
+const HOST = '0.0.0.0';
+const PORT = Number(process.env.PORT ?? 8080);
 
-// ESM Node18 → fetch global OK. Timeout manual con AbortController.
-function withTimeout(ms: number) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms).unref();
-  return { signal: c.signal, cancel: () => clearTimeout(t) };
-}
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
 
-function signHmac(key: string | undefined, payload: string) {
-  if (!key || key.length < 8) return null; // fallback: sin firma si no hay clave
-  return createHmac("sha256", key).update(payload).digest("hex");
-}
-
-function hostFrom(url: string) {
-  try { return new URL(url).hostname.toLowerCase(); } catch { return ""; }
-}
-
-async function emitEvent(traceId: string, body: any) {
-  try {
-    const url = `${process.env.COLLECTOR_URL}/v1/events`;
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        traceId,
-        type: "gate.decision",
-        ts: new Date().toISOString(),
-        attrs: body,
-      }),
-    });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      console.error("[gateway] emitEvent failed", r.status, txt);
-    }
-  } catch (e: any) {
-    console.error("[gateway] emitEvent error", e?.message || e);
-  }
-}
+type ProxyBody = {
+  method?: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  traceId?: string;
+};
 
 const app = Fastify({ logger: true });
 
@@ -53,76 +25,94 @@ app.setErrorHandler((err, req, reply) => {
 
 await app.register(cors, { origin: true });
 
-app.post("/v1/proxy", async (req, reply) => {
-  const started = Date.now();
-  let decision: "allow" | "deny" = "deny";
-  let status = 0;
-  let target = "";
+// Health check
+app.get('/healthz', async () => ({ ok: true }));
+
+// Carga segura de ALLOW_HOSTS
+const raw = process.env.ALLOW_HOSTS ?? '';
+const ALLOW_SET = new Set(
+  raw.split(',').map(h => h.trim().toLowerCase()).filter(Boolean)
+);
+
+function isAllowed(urlStr: string) {
+  let host: string;
+  try { host = new URL(urlStr).hostname.toLowerCase(); }
+  catch { return false; }
+  return ALLOW_SET.has(host);
+}
+
+const COLLECTOR_URL = process.env.COLLECTOR_URL!;
+const HMAC_KEY = process.env.HMAC_KEY ?? 'replace-me';
+
+// Utilidad fire-and-forget para emitir eventos
+async function emitEvent(evt: any) {
+  try {
+    await fetch(`${COLLECTOR_URL}/v1/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(evt),
+    });
+  } catch (e) {
+    console.error('emitEvent failed', e);
+  }
+}
+
+app.post('/v1/proxy', async (req, reply) => {
+  const body = req.body as ProxyBody;
+
+  if (!body?.url) {
+    return reply.code(400).send({ error: 'Missing url' });
+  }
+  
+  if (!isAllowed(body.url)) {
+    await emitEvent({
+      traceId: body.traceId ?? crypto.randomUUID(),
+      type: 'gate.decision',
+      ts: new Date().toISOString(),
+      attrs: { allowed: false, reason: 'host_not_in_allowlist', url: body.url }
+    });
+    return reply.code(403).send({ error: 'Host not allowed' });
+  }
+
+  const method = (body.method ?? 'GET').toUpperCase();
+  const headers = new Headers(body.headers ?? {});
+  headers.set('x-toolgate-sig', HMAC_KEY);
 
   try {
-    // 1) Validación básica
-    const body = req.body as {
-      method: string; url: string; headers?: Record<string, string>;
-      body?: any; traceId?: string;
-    };
-    if (!body?.method || !body?.url) {
-      reply.code(400).send({ error: "bad_request" }); return;
-    }
-    target = body.url;
-
-    // 2) Allowlist
-    const allowed = (process.env.ALLOW_HOSTS || "")
-      .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-    const host = hostFrom(body.url);
-    if (!host || !allowed.includes(host)) {
-      decision = "deny"; status = 403;
-      reply.code(403).send({ allowed: false, reason: "domain-not-allowed" });
-      return;
-    }
-
-    // 3) Firma HMAC (no romper si no hay clave)
-    const ts = Date.now().toString();
-    const payload = JSON.stringify({ method: body.method, url: body.url, traceId: body.traceId || "", ts });
-    const sig = signHmac(process.env.HMAC_KEY, payload);
-
-    // 4) Proxy con timeout
-    const { signal, cancel } = withTimeout(8000);
     const upstream = await fetch(body.url, {
-      method: body.method,
-      headers: {
-        ...(body.headers || {}),
-        ...(sig ? { "x-toolgate-sig": sig, "x-toolgate-ts": ts, "x-toolgate-trace": body.traceId || "" } : {}),
-      },
-      body: body.body ? (typeof body.body === "string" ? body.body : JSON.stringify(body.body)) : undefined,
-      signal,
-    }).finally(() => cancel());
-
-    decision = "allow";
-    status = upstream.status;
-    const raw = await upstream.arrayBuffer();
-
-    // 5) Propagar status/headers básicos (filtrados)
-    const headers: Record<string, string> = {};
-    upstream.headers.forEach((v, k) => {
-      if (["content-type", "content-length"].includes(k)) headers[k] = v;
+      method,
+      headers,
+      body: ['GET','HEAD'].includes(method) ? undefined : JSON.stringify(body.body),
     });
 
-    reply.code(status).headers(headers).send(Buffer.from(raw));
-  } catch (e: any) {
-    console.error("[gateway] proxy error:", e?.message || e);
-    status = 502;
-    reply.code(502).send({ error: "upstream_error" });
-  } finally {
-    const latencyMs = Date.now() - started;
-    await emitEvent((req.body as any)?.traceId || "", { decision, target, status, latencyMs });
+    const text = await upstream.text();
+
+    // Evento al collector (no bloqueante)
+    emitEvent({
+      traceId: body.traceId ?? crypto.randomUUID(),
+      type: 'proxy.forward',
+      ts: new Date().toISOString(),
+      attrs: {
+        url: body.url,
+        status: upstream.status,
+        ok: upstream.ok
+      }
+    });
+
+    reply.code(upstream.status);
+    return reply.headers(Object.fromEntries(upstream.headers)).send(text);
+
+  } catch (err: any) {
+    // 502: upstream falló
+    emitEvent({
+      traceId: body.traceId ?? crypto.randomUUID(),
+      type: 'proxy.error',
+      ts: new Date().toISOString(),
+      attrs: { url: body.url, message: String(err) }
+    });
+    return reply.code(502).send({ error: 'Upstream error', detail: String(err) });
   }
 });
 
-// healthcheck
-app.get("/healthz", async () => ({ ok: true }));
-
-const PORT = Number(process.env.PORT ?? 8080);
-const HOST = "0.0.0.0";
-
-await app.listen({ port: PORT, host: HOST });
-app.log.info(`listening on ${HOST}:${PORT}`);
+await app.listen({ host: HOST, port: PORT });
+app.log.info(`gateway listening on ${HOST}:${PORT}`);
