@@ -10,7 +10,6 @@ const PORT = Number(process.env.PORT ?? 8080);
 const app = fastify({ logger: true });
 
 // health & raíz (como sanitizer)
-app.get('/healthz', async () => ({ ok: true, service: 'collector', storage: 'memory' }));
 app.get('/', async () => ({ ok: true, service: 'collector' }));
 
 // --------- tipos + storage en memoria ----------
