@@ -59,7 +59,7 @@ app.post('/v1/events', async (req, reply) => {
     try {
         const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body);
         const ev = EventSchema.parse(body);
-        const eventId = storageKind === 'pg' ? randomUUID() : `${ev.traceId}:${Date.now()}`;
+        const eventId = randomUUID();
         await storage.insert({ ...ev, eventId });
         return reply.send({ ok: true, eventId });
     }
