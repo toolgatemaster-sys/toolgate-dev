@@ -1,97 +1,72 @@
 // apps/gateway/src/index.ts
-import { setDefaultResultOrder } from "node:dns";
-setDefaultResultOrder("ipv4first");
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
 
-import fastify from "fastify";
-import { ProxyRequestSchema, type ProxyRequest } from "./types.js";
-import { makeHostAllowChecker } from "./allowlist.js";
-import { makeEventEmitter } from "./events.js";
+import fastify from 'fastify';
+import { z } from 'zod';
 
-const HOST = "0.0.0.0";
-const PORT_STR = process.env.PORT;
-if (!PORT_STR) { console.error("[gateway] FALTA process.env.PORT"); process.exit(1); }
-const PORT = Number(PORT_STR);
+const HOST = '0.0.0.0';
+const PORT = Number(process.env.PORT ?? 8080);
 
-const SAFE_MODE = process.env.SAFE_MODE === "1";
-const HMAC_KEY = process.env.HMAC_KEY ?? "";
-const COLLECTOR_URL = process.env.COLLECTOR_URL ?? "";
-const ALLOW_HOSTS = process.env.ALLOW_HOSTS ?? "";
+const COLLECTOR_URL = process.env.COLLECTOR_URL; // ej: https://toolgate-collector-production.up.railway.app
+if (!COLLECTOR_URL) {
+  console.error('[gateway] FALTA COLLECTOR_URL');
+  process.exit(1);
+}
 
-(async () => {
-  const app = fastify({ logger: true });
+const app = fastify({ logger: true });
 
-  // Healthz SIEMPRE primero
-  app.get("/healthz", async () => ({ ok: true, safe: SAFE_MODE }));
+app.get('/healthz', async () => ({
+  ok: true,
+  service: 'gateway',
+  upstream: { collector: COLLECTOR_URL }
+}));
 
-  if (SAFE_MODE) {
-    // 🔒 SAFE MODE: no registres rutas extra
-    await app.listen({ host: HOST, port: PORT });
-    app.log.info(`[gateway] SAFE_MODE=1 listening on ${HOST}:${PORT}`);
-    process.on("SIGTERM", async () => { try { await app.close(); } finally { process.exit(0); } });
-    return; // ⬅️ importantísimo: no sigas registrando rutas
+// schema del evento (igual que collector)
+const EventSchema = z.object({
+  traceId: z.string().min(1),
+  type: z.string().min(1),
+  ts: z.string().min(1),
+  attrs: z.record(z.unknown()).default({})
+});
+
+// POST /v1/events -> proxy a collector
+app.post('/v1/events', async (req, reply) => {
+  try {
+    const raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const ev = EventSchema.parse(raw as unknown);
+
+    const res = await fetch(`${COLLECTOR_URL}/v1/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(ev)
+    });
+
+    const body = await res.text();
+    reply.code(res.status).headers(Object.fromEntries(res.headers as any));
+    return reply.send(body);
+  } catch (err) {
+    app.log.error({ err }, 'gateway.events.proxy_failed');
+    return reply.code(502).send({ ok: false, error: 'upstream_error' });
   }
+});
 
-  // ------- MODO NORMAL: registra TODO ANTES de listen -------
-  const isAllowed = makeHostAllowChecker(ALLOW_HOSTS);
-  const events = makeEventEmitter({
-    collectorURL: COLLECTOR_URL,
-    hmacKey: HMAC_KEY,
-    logger: (o, msg) => app.log.warn(o, msg)
-  });
-
-  app.post("/v1/proxy", async (req, reply) => {
-    let body: ProxyRequest;
-    try {
-      body = ProxyRequestSchema.parse(req.body);
-    } catch (e: unknown) {
-      return reply.code(400).send({ error: "invalid_proxy_payload", detail: String((e as Error).message ?? e) });
-    }
-
-    const { method = "GET", url, headers = {}, traceId } = body;
-
-    if (!isAllowed(url)) {
-      await events.emit({
-        traceId, type: "gate.decision", ts: new Date().toISOString(),
-        attrs: { allowed: false, reason: "domain-not-allowed", url }
-      });
-      return reply.code(403).send({ allowed: false, reason: "domain-not-allowed" });
-    }
-
-    try {
-      const m = method.toUpperCase();
-      const h = new Headers(headers);
-      const res = await fetch(url, {
-        method: m,
-        headers: h,
-        body: (m === "GET" || m === "HEAD") ? undefined : serialize(body.body)
-      });
-
-      const text = await res.text();
-      for (const [k, v] of res.headers) reply.header(k, v);
-      reply.code(res.status);
-
-      events.emit({
-        traceId, type: "proxy.forward", ts: new Date().toISOString(),
-        attrs: { url, method: m, status: res.status, ok: res.ok }
-      });
-
-      return reply.send(text);
-    } catch (err: unknown) {
-      app.log.error({ err }, "proxy.fetch_failed");
-      await events.emit({
-        traceId, type: "proxy.error", ts: new Date().toISOString(),
-        attrs: { url, method, message: String(err) }
-      });
-      return reply.code(502).send({ error: "upstream_error" });
-    }
-  });
-
-  await app.listen({ host: HOST, port: PORT });
-  app.log.info(`[gateway] listening on ${HOST}:${PORT}`);
-  process.on("SIGTERM", async () => { try { await app.close(); } finally { process.exit(0); } });
-
-  function serialize(b: unknown): string | undefined {
-    if (b == null) return undefined;
-    return typeof b === "string" ? b : JSON.stringify(b);
+// GET /v1/traces/:id -> proxy a collector
+app.get('/v1/traces/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  try {
+    const res = await fetch(`${COLLECTOR_URL}/v1/traces/${encodeURIComponent(id)}`);
+    const body = await res.text();
+    reply.code(res.status).headers(Object.fromEntries(res.headers as any));
+    return reply.send(body);
+  } catch (err) {
+    app.log.error({ err }, 'gateway.traces.proxy_failed');
+    return reply.code(502).send({ ok: false, error: 'upstream_error' });
   }
-})();
+});
+
+app.listen({ host: HOST, port: PORT })
+  .then(() => app.log.info(`[gateway] listening on ${HOST}:${PORT}`))
+  .catch((e) => { app.log.error(e, 'listen failed'); process.exit(1); });
+
+process.on('SIGTERM', async () => { try { await app.close(); } finally { process.exit(0); } });
