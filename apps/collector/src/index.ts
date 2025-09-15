@@ -26,17 +26,63 @@ const EventSchema = z.object({
   ts: z.string().min(1),
   attrs: z.record(z.unknown()).default({}),
 });
-const traces = new Map<string, ToolgateEvent[]>();
+
+// arriba del POST/GET declara una interfaz común
+type Storage = {
+  insert(ev: ToolgateEvent & { eventId: string }): Promise<void>;
+  listByTrace(id: string): Promise<(ToolgateEvent & { eventId: string })[]>;
+};
+
+let storage: Storage;
+let storageKind: 'memory' | 'pg' = 'memory';
+
+// memoria
+const MemStorage = (() => {
+  const traces = new Map<string, (ToolgateEvent & { eventId: string })[]>();
+  return {
+    async insert(ev: ToolgateEvent & { eventId: string }) {
+      const arr = traces.get(ev.traceId) ?? [];
+      arr.push(ev);
+      traces.set(ev.traceId, arr);
+    },
+    async listByTrace(id: string) {
+      return traces.get(id) ?? [];
+    }
+  } satisfies Storage;
+})();
+
+// si hay DATABASE_URL, intenta PG
+if (process.env.DATABASE_URL) {
+  try {
+    const { PgStorage } = await import('./storage.pg.js'); // transpila a .js
+    const pg = new PgStorage(process.env.DATABASE_URL!);
+    await pg.init();
+    storage = {
+      insert: (ev) => pg.insert(ev),
+      listByTrace: (id) => pg.listByTrace(id),
+    };
+    storageKind = 'pg';
+    app.log.info('[collector] storage=pg OK');
+  } catch (e) {
+    app.log.error({ err: String(e) }, '[collector] storage=pg FAILED → using memory');
+    storage = MemStorage;
+    storageKind = 'memory';
+  }
+} else {
+  storage = MemStorage;
+}
+
+// actualizar healthz para reportar storage actual
+app.get('/healthz', async () => ({ ok: true, service: 'collector', storage: storageKind }));
 
 // POST /v1/events
 app.post('/v1/events', async (req, reply) => {
   try {
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as unknown;
     const ev = EventSchema.parse(body);
-    const list = traces.get(ev.traceId) ?? [];
-    list.push(ev);
-    traces.set(ev.traceId, list);
-    return reply.send({ ok: true, eventId: `${ev.traceId}:${list.length}` });
+    const eventId = `${ev.traceId}:${Date.now()}`;
+    await storage.insert({ ...ev, eventId });
+    return reply.send({ ok: true, eventId });
   } catch (err) {
     app.log.error({ err }, 'events.invalid_payload');
     return reply.code(400).send({ ok: false, error: 'invalid_payload' });
@@ -46,7 +92,7 @@ app.post('/v1/events', async (req, reply) => {
 // GET /v1/traces/:id
 app.get('/v1/traces/:id', async (req, reply) => {
   const { id } = req.params as { id: string };
-  const events = traces.get(id) ?? [];
+  const events = await storage.listByTrace(id);
   return reply.send({ traceId: id, events });
 });
 
