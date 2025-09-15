@@ -22,7 +22,7 @@ importers:
   apps/collector:
     dependencies:
       fastify:
-        specifier: ^4.28.1
+        specifier: ^4.29.1
         version: 4.29.1
       pg:
         specifier: ^8.12.0
