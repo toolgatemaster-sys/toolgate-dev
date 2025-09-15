@@ -3,6 +3,7 @@ setDefaultResultOrder('ipv4first');
 
 import fastify from 'fastify';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 
 const HOST = '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -79,7 +80,7 @@ app.post('/v1/events', async (req, reply) => {
   try {
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as unknown;
     const ev = EventSchema.parse(body);
-    const eventId = `${ev.traceId}:${Date.now()}`;
+    const eventId = randomUUID();
     await storage.insert({ ...ev, eventId });
     return reply.send({ ok: true, eventId });
   } catch (err) {
