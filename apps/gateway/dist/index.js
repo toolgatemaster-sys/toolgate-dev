@@ -3,6 +3,7 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 import fastify from 'fastify';
 import { z } from 'zod';
+import { createHmac } from 'node:crypto';
 import cors from '@fastify/cors';
 const HOST = '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -48,6 +49,9 @@ async function fetchUpstream(url, init, timeoutMs = 2000) {
     finally {
         t1.clear();
     }
+}
+function hmacHex(body, key) {
+    return createHmac('sha256', key).update(body, 'utf8').digest('hex');
 }
 // schema del evento (igual que collector)
 const EventSchema = z.object({
@@ -101,11 +105,17 @@ app.post('/v1/events', async (req, reply) => {
                 clean = ev; // continuar crudo
             }
         }
-        // 2) envía al collector
+        // 2) preparar headers (HMAC opcional)
+        const payload = JSON.stringify(clean);
+        const headers = { 'content-type': 'application/json' };
+        if (process.env.HMAC_KEY) {
+            headers['x-signature'] = hmacHex(payload, process.env.HMAC_KEY);
+        }
+        // 3) envía al collector
         const res = await fetchUpstream(`${COLLECTOR_URL}/v1/events`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(clean)
+            headers,
+            body: payload
         });
         const body = await res.text();
         reply.code(res.status).headers(Object.fromEntries(res.headers));

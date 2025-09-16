@@ -1,7 +1,8 @@
-import { setDefaultResultOrder } from 'dns';
+ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 
 import fastify from 'fastify';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
@@ -75,9 +76,39 @@ if (process.env.DATABASE_URL) {
 // actualizar healthz para reportar storage actual
 app.get('/healthz', async () => ({ ok: true, service: 'collector', storage: storageKind }));
 
+// Parser JSON como string para conservar rawBody
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  try {
+    (req as any).rawBody = body;
+    done(null, JSON.parse(body as string));
+  } catch (e) {
+    done(e as Error);
+  }
+});
+
+function verifySignature(rawBody: string, key: string, sigHex: string): boolean {
+  try {
+    const expected = createHmac('sha256', key).update(rawBody, 'utf8').digest();
+    const got = Buffer.from(sigHex, 'hex');
+    if (expected.length !== got.length) return false;
+    return timingSafeEqual(expected, got);
+  } catch {
+    return false;
+  }
+}
+
 // POST /v1/events
 app.post('/v1/events', async (req, reply) => {
   try {
+    // HMAC opcional (si Collector tiene HMAC_KEY, exige firma)
+    if (process.env.HMAC_KEY) {
+      const rawBody = (req as any).rawBody as string | undefined;
+      const sig = req.headers['x-signature'];
+      if (!rawBody || typeof sig !== 'string' || !verifySignature(rawBody, process.env.HMAC_KEY, sig)) {
+        return reply.code(401).send({ ok: false, error: 'bad_signature' });
+      }
+    }
+
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as unknown;
     const ev = EventSchema.parse(body);
     const eventId = randomUUID();
