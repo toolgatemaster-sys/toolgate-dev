@@ -8,6 +8,7 @@ const HOST = '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8080);
 const COLLECTOR_URL = process.env.COLLECTOR_URL; // ej: https://toolgate-collector-production.up.railway.app
 const SANITIZER_URL = process.env.SANITIZER_URL;
+const REQUIRE_SANITIZER = process.env.REQUIRE_SANITIZER === '1';
 if (!COLLECTOR_URL) {
     console.error('[gateway] FALTA COLLECTOR_URL');
     process.exit(1);
@@ -55,32 +56,52 @@ const EventSchema = z.object({
     ts: z.string().min(1),
     attrs: z.record(z.unknown()).default({})
 });
-// integración con Sanitizer (opcional)
-async function sanitizeEvent(ev) {
+// --- integración con Sanitizer (real: /v1/sanitize-context) ---
+async function sanitizeIntoAttrs(ev) {
     if (!SANITIZER_URL)
-        return { ok: true, event: ev };
-    const res = await fetchUpstream(`${SANITIZER_URL}/v1/sanitize`, {
+        return ev;
+    const text = String(ev.attrs?.text ?? '');
+    if (!text)
+        return ev; // nada que sanear
+    const sreq = { text, stripHtml: true, defang: true, spotlight: true };
+    const res = await fetchUpstream(`${SANITIZER_URL}/v1/sanitize-context`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(ev)
+        body: JSON.stringify(sreq)
     }, 1500);
-    if (!res.ok)
-        throw new Error(`sanitizer ${res.status}`);
-    const json = await res.json();
-    if (!json?.ok)
-        throw new Error('sanitizer_not_ok');
-    return json;
+    if (!res.ok) {
+        if (REQUIRE_SANITIZER)
+            throw new Error(`sanitizer ${res.status}`);
+        // fallback: no tocar attrs
+        return ev;
+    }
+    const { clean, score, signals, analysis, spotlighted } = await res.json();
+    const nextAttrs = { ...ev.attrs };
+    nextAttrs.text = clean; // reemplaza el texto con la versión limpia
+    nextAttrs._sanitizer = { score, signals, analysis, spotlighted };
+    return { ...ev, attrs: nextAttrs };
 }
 // POST /v1/events -> proxy a collector
 app.post('/v1/events', async (req, reply) => {
     try {
         const raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const ev = EventSchema.parse(raw);
-        // 1) sanitiza attrs
-        const sanitized = await sanitizeEvent(ev);
-        // 2) re-parse por seguridad
-        const clean = EventSchema.parse(sanitized.event);
-        // 3) envía al collector
+        // 1) sanitiza (respeta REQUIRE_SANITIZER con fallback)
+        let clean = ev;
+        try {
+            clean = await sanitizeIntoAttrs(ev);
+        }
+        catch (sanErr) {
+            if (REQUIRE_SANITIZER) {
+                req.log.error({ err: String(sanErr) }, 'sanitize_failed_require');
+                return reply.code(400).send({ ok: false, error: 'sanitize_failed' });
+            }
+            else {
+                req.log.warn({ err: String(sanErr) }, 'sanitize_failed_fallback_raw');
+                clean = ev; // continuar crudo
+            }
+        }
+        // 2) envía al collector
         const res = await fetchUpstream(`${COLLECTOR_URL}/v1/events`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
