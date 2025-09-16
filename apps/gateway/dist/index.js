@@ -3,6 +3,7 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 import fastify from 'fastify';
 import { z } from 'zod';
+import cors from '@fastify/cors';
 const HOST = '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8080);
 const COLLECTOR_URL = process.env.COLLECTOR_URL; // ej: https://toolgate-collector-production.up.railway.app
@@ -11,11 +12,17 @@ if (!COLLECTOR_URL) {
     process.exit(1);
 }
 const app = fastify({ logger: true });
+// CORS
+app.register(cors, {
+    origin: true
+});
 app.get('/healthz', async () => ({
     ok: true,
     service: 'gateway',
     upstream: { collector: COLLECTOR_URL }
 }));
+// raíz
+app.get('/', async () => ({ ok: true, service: 'gateway' }));
 // schema del evento (igual que collector)
 const EventSchema = z.object({
     traceId: z.string().min(1),
