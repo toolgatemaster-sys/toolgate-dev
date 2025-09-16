@@ -30,6 +30,29 @@ app.get('/healthz', async () => ({
 // raíz
 app.get('/', async () => ({ ok: true, service: 'gateway' }));
 
+// --- helpers: timeout + 1 retry ---
+function withTimeout(ms: number) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, clear: () => clearTimeout(t) };
+}
+
+async function fetchUpstream(url: string, init: RequestInit, timeoutMs = 2000) {
+  const t1 = withTimeout(timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: t1.signal });
+  } catch (_) {
+    const t2 = withTimeout(timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: t2.signal });
+    } finally {
+      t2.clear();
+    }
+  } finally {
+    t1.clear();
+  }
+}
+
 // schema del evento (igual que collector)
 const EventSchema = z.object({
   traceId: z.string().min(1),
@@ -44,7 +67,7 @@ app.post('/v1/events', async (req, reply) => {
     const raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const ev = EventSchema.parse(raw as unknown);
 
-    const res = await fetch(`${COLLECTOR_URL}/v1/events`, {
+    const res = await fetchUpstream(`${COLLECTOR_URL}/v1/events`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(ev)
@@ -63,7 +86,7 @@ app.post('/v1/events', async (req, reply) => {
 app.get('/v1/traces/:id', async (req, reply) => {
   const { id } = req.params as { id: string };
   try {
-    const res = await fetch(`${COLLECTOR_URL}/v1/traces/${encodeURIComponent(id)}`);
+    const res = await fetchUpstream(`${COLLECTOR_URL}/v1/traces/${encodeURIComponent(id)}`, { method: 'GET' });
     const body = await res.text();
     reply.code(res.status).headers(Object.fromEntries(res.headers as any));
     return reply.send(body);
