@@ -7,6 +7,7 @@ import cors from '@fastify/cors';
 const HOST = '0.0.0.0';
 const PORT = Number(process.env.PORT ?? 8080);
 const COLLECTOR_URL = process.env.COLLECTOR_URL; // ej: https://toolgate-collector-production.up.railway.app
+const SANITIZER_URL = process.env.SANITIZER_URL;
 if (!COLLECTOR_URL) {
     console.error('[gateway] FALTA COLLECTOR_URL');
     process.exit(1);
@@ -54,23 +55,44 @@ const EventSchema = z.object({
     ts: z.string().min(1),
     attrs: z.record(z.unknown()).default({})
 });
+// integración con Sanitizer (opcional)
+async function sanitizeEvent(ev) {
+    if (!SANITIZER_URL)
+        return { ok: true, event: ev };
+    const res = await fetchUpstream(`${SANITIZER_URL}/v1/sanitize`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(ev)
+    }, 1500);
+    if (!res.ok)
+        throw new Error(`sanitizer ${res.status}`);
+    const json = await res.json();
+    if (!json?.ok)
+        throw new Error('sanitizer_not_ok');
+    return json;
+}
 // POST /v1/events -> proxy a collector
 app.post('/v1/events', async (req, reply) => {
     try {
         const raw = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const ev = EventSchema.parse(raw);
+        // 1) sanitiza attrs
+        const sanitized = await sanitizeEvent(ev);
+        // 2) re-parse por seguridad
+        const clean = EventSchema.parse(sanitized.event);
+        // 3) envía al collector
         const res = await fetchUpstream(`${COLLECTOR_URL}/v1/events`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(ev)
+            body: JSON.stringify(clean)
         });
         const body = await res.text();
         reply.code(res.status).headers(Object.fromEntries(res.headers));
         return reply.send(body);
     }
     catch (err) {
-        app.log.error({ err }, 'gateway.events.proxy_failed');
-        return reply.code(502).send({ ok: false, error: 'upstream_error' });
+        app.log.error({ err }, 'gateway.events.sanitize_or_proxy_failed');
+        return reply.code(400).send({ ok: false, error: 'invalid_or_sanitize_failed' });
     }
 });
 // GET /v1/traces/:id -> proxy a collector
