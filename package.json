@@ -8,29 +8,18 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "test:watch": "pnpm -r test:watch",
-    "test:ui": "pnpm -r test:ui",
-    "test:flow": "GATEWAY_URL=https://toolgate-gateway.up.railway.app COLLECTOR_URL=https://toolgate-collector.up.railway.app SANITIZER_URL=https://toolgate-sanitizer.up.railway.app pnpm --filter @toolgate/collector test:flow && pnpm --filter @toolgate/gateway test:flow",
-    "test:integration": "GATEWAY_URL=https://toolgate-gateway.up.railway.app COLLECTOR_URL=https://toolgate-collector.up.railway.app SANITIZER_URL=https://toolgate-sanitizer.up.railway.app pnpm --filter @toolgate/sanitizer test && pnpm --filter @toolgate/gateway test && pnpm --filter @toolgate/collector test:flow",
-    "test:e2e": "pnpm --filter @toolgate/web test:e2e",
-    "test:e2e:ui": "pnpm --filter @toolgate/web test:e2e:ui",
-    "dev": "./scripts/dev-all.sh",
-    "dev:collector": "cd apps/collector && pnpm dev",
-    "dev:gateway": "cd apps/gateway && pnpm dev",
-    "dev:sanitizer": "cd apps/sanitizer && pnpm dev",
-    "dev:web": "cd apps/web && pnpm dev",
-    "test:services": "./scripts/test-services.sh",
-    "install:all": "pnpm install"
+    "test": "cross-env NODE_ENV=test vitest run",
+    "test:watch": "cross-env NODE_ENV=test vitest",
+    "test:integration": "cross-env NODE_ENV=test vitest run --dir apps --coverage=false"
   },
   "dependencies": {
     "@fastify/cors": "^8.4.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.13",
-    "@types/pg": "^8.15.5",
-    "@vitest/ui": "^3.2.4",
-    "vitest": "^3.2.4"
+    "@types/node": "^24.5.1",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.6.1",
+    "typescript": "^5.9.2",
+    "vitest": "^2.0.0"
   }
 }

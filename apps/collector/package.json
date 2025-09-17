@@ -23,9 +23,10 @@
     "@types/node": "^20.12.12",
     "@types/pg": "^8.11.6",
     "tsx": "^4.19.2",
-    "typescript": "^5.5.4",
+    "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
-

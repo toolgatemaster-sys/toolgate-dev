@@ -112,7 +112,7 @@ app.post('/v1/events', async (req, reply) => {
     const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as unknown;
     const ev = EventSchema.parse(body);
     const eventId = randomUUID();
-    await storage.insert({ ...ev, eventId });
+    await storage.insert({ ...ev, eventId } as ToolgateEvent & { eventId: string });
     return reply.send({ ok: true, eventId });
   } catch (err) {
     app.log.error({ err }, 'events.invalid_payload');

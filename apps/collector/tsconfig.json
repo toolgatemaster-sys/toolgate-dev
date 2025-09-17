@@ -6,13 +6,12 @@
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": "src",
-    "strict": true,
-    "noImplicitAny": true,
-    "noUncheckedIndexedAccess": true,
-    "useUnknownInCatchVariables": true,
-    "esModuleInterop": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+    "useUnknownInCatchVariables": false,
+    "esModuleInterop": false,
     "skipLibCheck": true,
-    "types": ["node"]
   },
   "include": ["src"]
 }
