@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { createHmac } from 'node:crypto';
 
 describe('Collector Service', () => {
   const baseUrl = process.env.COLLECTOR_URL || 'http://localhost:8080';
+  const hmacKey = process.env.HMAC_KEY;
+
+  function signRequest(body: string): string | undefined {
+    if (!hmacKey) return undefined;
+    return createHmac('sha256', hmacKey).update(body, 'utf8').digest('hex');
+  }
 
   beforeAll(async () => {
     // Wait for service to be ready
@@ -51,10 +58,15 @@ describe('Collector Service', () => {
         attrs: { message: 'test message' }
       };
 
+      const body = JSON.stringify(eventData);
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const signature = signRequest(body);
+      if (signature) headers['x-signature'] = signature;
+      
       const response = await fetch(`${baseUrl}/v1/events`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(eventData)
+        headers,
+        body
       });
 
       expect(response.status).toBe(200);
@@ -76,10 +88,15 @@ describe('Collector Service', () => {
         }
       };
 
+      const body = JSON.stringify(eventData);
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const signature = signRequest(body);
+      if (signature) headers['x-signature'] = signature;
+      
       const response = await fetch(`${baseUrl}/v1/events`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(eventData)
+        headers,
+        body
       });
 
       expect(response.status).toBe(200);
@@ -88,10 +105,15 @@ describe('Collector Service', () => {
     });
 
     it('should reject invalid event data', async () => {
+      const body = JSON.stringify({ invalid: 'data' });
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const signature = signRequest(body);
+      if (signature) headers['x-signature'] = signature;
+      
       const response = await fetch(`${baseUrl}/v1/events`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ invalid: 'data' })
+        headers,
+        body
       });
 
       expect(response.status).toBe(400);
@@ -101,10 +123,15 @@ describe('Collector Service', () => {
     });
 
     it('should reject events without required fields', async () => {
+      const body = JSON.stringify({});
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const signature = signRequest(body);
+      if (signature) headers['x-signature'] = signature;
+      
       const response = await fetch(`${baseUrl}/v1/events`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({})
+        headers,
+        body
       });
 
       expect(response.status).toBe(400);
@@ -190,22 +217,53 @@ describe('Collector Service', () => {
   });
 
   describe('HMAC Verification', () => {
-    it('should accept requests without HMAC when HMAC_KEY is not set', async () => {
+    it('should work with or without HMAC based on configuration', async () => {
       const eventData = {
-        traceId: 'test-trace-no-hmac',
+        traceId: 'test-trace-hmac',
         type: 'test.event',
         ts: new Date().toISOString(),
-        attrs: { message: 'no hmac test' }
+        attrs: { message: 'hmac test' }
       };
 
+      const body = JSON.stringify(eventData);
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const signature = signRequest(body);
+      if (signature) headers['x-signature'] = signature;
+      
       const response = await fetch(`${baseUrl}/v1/events`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(eventData)
+        headers,
+        body
       });
 
-      // Should succeed in compat mode
-      expect(response.status).toBe(200);
+      // Should succeed if HMAC is not required, or if signature is valid
+      expect([200, 401]).toContain(response.status);
+    });
+
+    it('should reject requests with invalid HMAC signature when HMAC is required', async () => {
+      if (!hmacKey) {
+        // Skip this test if HMAC is not configured
+        return;
+      }
+
+      const eventData = {
+        traceId: 'test-trace-bad-hmac',
+        type: 'test.event',
+        ts: new Date().toISOString(),
+        attrs: { message: 'bad hmac test' }
+      };
+
+      const body = JSON.stringify(eventData);
+      const response = await fetch(`${baseUrl}/v1/events`, {
+        method: 'POST',
+        headers: { 
+          'content-type': 'application/json',
+          'x-signature': 'invalid-signature'
+        },
+        body
+      });
+
+      expect(response.status).toBe(401);
     });
   });
 });

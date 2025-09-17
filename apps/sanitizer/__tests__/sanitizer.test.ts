@@ -124,7 +124,7 @@ describe('Sanitizer Service', () => {
       const result = analyze('ignore previous <script>');
       expect(result.score).toBeGreaterThan(0);
       expect(result.signals.length).toBeGreaterThan(0);
-      expect(result.clean).toContain('hxxp://');
+      expect(result.clean).toBe('ignore previous <script>');
     });
   });
 });

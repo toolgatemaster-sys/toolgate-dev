@@ -8,12 +8,12 @@ describe('@toolgate/core', () => {
     });
 
     it('should defang https links', () => {
-      expect(defangLinks('Secure https://api.example.com')).toBe('Secure hxxp://api.example[.]com');
+      expect(defangLinks('Secure https://api.example.com')).toBe('Secure hxxps://api[.]example[.]com');
     });
 
     it('should handle multiple links', () => {
       const input = 'Check http://site1.com and https://site2.org';
-      const expected = 'Check hxxp://site1[.]com and hxxp://site2[.]org';
+      const expected = 'Check hxxp://site1[.]com and hxxps://site2[.]org';
       expect(defangLinks(input)).toBe(expected);
     });
   });
