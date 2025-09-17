@@ -4,6 +4,8 @@ import fastify from 'fastify';
 import { z } from 'zod';
 import cors from '@fastify/cors';
 import { metricsPlugin } from './metrics.plugin.js';
+import { createPolicyClient } from './policy.client.js';
+import { createPolicyApplicator } from './policy.apply.js';
 
 export async function createGateway() {
   const app = fastify({ logger: false });
@@ -13,6 +15,17 @@ export async function createGateway() {
   
   // Register CORS
   await app.register(cors, { origin: true });
+  
+  // Initialize policy enforcement
+  const COLLECTOR_URL = process.env.COLLECTOR_URL;
+  let policyApplicator: any = null;
+  if (COLLECTOR_URL) {
+    const policyClient = createPolicyClient(COLLECTOR_URL, 30000); // 30s TTL
+    policyApplicator = createPolicyApplicator(policyClient);
+    app.log.info('Policy enforcement enabled');
+  } else {
+    app.log.warn('No COLLECTOR_URL set, policy enforcement disabled');
+  }
   
   // Health check
   app.get('/healthz', async () => ({ 
@@ -51,6 +64,25 @@ export async function createGateway() {
     }
   }
   
+  // Policy enforcement hook
+  app.addHook('preHandler', async (req, reply) => {
+    if (policyApplicator && typeof policyApplicator.shouldEnforcePolicy === 'function') {
+      const policyRequest = policyApplicator.extractPolicyRequest(req);
+      if (policyRequest) {
+        const result = await policyApplicator.applyPolicy(policyRequest);
+        if (result.decision === 'deny') {
+          return reply.code(403).send({ 
+            ok: false, 
+            error: 'Policy violation', 
+            reason: result.reason 
+          });
+        }
+        // Add policy decision to request context for logging
+        (req as any).policyDecision = result;
+      }
+    }
+  });
+
   // POST /v1/events -> proxy a collector
   app.post('/v1/events', async (req, reply) => {
     try {
