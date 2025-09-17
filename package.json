@@ -12,6 +12,8 @@
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
     "test:ui": "pnpm -r test:ui",
+    "test:flow": "GATEWAY_URL=https://toolgate-gateway.up.railway.app COLLECTOR_URL=https://toolgate-collector.up.railway.app SANITIZER_URL=https://toolgate-sanitizer.up.railway.app pnpm --filter @toolgate/collector test:flow && pnpm --filter @toolgate/gateway test:flow",
+    "test:integration": "GATEWAY_URL=https://toolgate-gateway.up.railway.app COLLECTOR_URL=https://toolgate-collector.up.railway.app SANITIZER_URL=https://toolgate-sanitizer.up.railway.app pnpm --filter @toolgate/sanitizer test && pnpm --filter @toolgate/gateway test && pnpm --filter @toolgate/collector test:flow",
     "test:e2e": "pnpm --filter @toolgate/web test:e2e",
     "test:e2e:ui": "pnpm --filter @toolgate/web test:e2e:ui",
     "dev": "./scripts/dev-all.sh",

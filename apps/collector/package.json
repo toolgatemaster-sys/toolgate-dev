@@ -10,7 +10,8 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:flow": "vitest run __tests__/collector.flow.test.ts"
   },
   "dependencies": {
     "fastify": "^4.29.1",
