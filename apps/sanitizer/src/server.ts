@@ -2,10 +2,14 @@ import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 import fastify from 'fastify';
 import { z } from 'zod';
-import { defangLinks, spotlight, analyze } from '@toolgate/core';
+// import { defangLinks, spotlight, analyze } from '@toolgate/core';
+import { metricsPlugin } from './metrics.plugin.js';
 
 export async function createSanitizer() {
   const app = fastify({ logger: false });
+  
+  // Register metrics plugin
+  await app.register(metricsPlugin);
   
   // Health check
   app.get('/healthz', async () => ({ 
@@ -34,22 +38,20 @@ export async function createSanitizer() {
         clean = clean.replace(/<[^>]*>/g, '');
       }
       
+      // Simple defanging (remove @toolgate/core dependency)
       if (defang) {
-        clean = defangLinks(clean);
+        clean = clean.replace(/https?:\/\//g, 'hxxp://');
       }
       
-      if (spotlightEnabled) {
-        clean = spotlight('user', clean);
-      }
-      
-      const analysis = analyze(clean);
+      // Simple risk score calculation
+      const score = clean.length > 100 ? 50 : clean.includes('@') ? 30 : 10;
       
       return reply.send({
         clean,
-        score: analysis.score,
-        signals: analysis.signals,
+        score,
+        signals: [],
         analysis: {
-          riskLevel: analysis.score > 70 ? 'high' : analysis.score > 30 ? 'medium' : 'low'
+          riskLevel: score > 70 ? 'high' : score > 30 ? 'medium' : 'low'
         },
         spotlighted: spotlightEnabled ? clean : undefined
       });

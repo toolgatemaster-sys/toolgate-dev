@@ -3,9 +3,13 @@ setDefaultResultOrder('ipv4first');
 import fastify from 'fastify';
 import { z } from 'zod';
 import cors from '@fastify/cors';
+import { metricsPlugin } from './metrics.plugin.js';
 
 export async function createGateway() {
   const app = fastify({ logger: false });
+  
+  // Register metrics plugin
+  await app.register(metricsPlugin);
   
   // Register CORS
   await app.register(cors, { origin: true });
