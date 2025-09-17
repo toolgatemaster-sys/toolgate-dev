@@ -1,0 +1,14 @@
+name: Guardrails
+on: [pull_request]
+jobs:
+  protect-configs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Check protected files not modified
+        run: |
+          PROTECTED='(^package\.json$)|(^pnpm-lock\.yaml$)|(^pnpm-workspace\.yaml$)|(^.*\/tsconfig.*\.json$)|(^\.eslintrc.*$)|(^\.prettierrc.*$)|(^\.npmrc$)|(^\.nvmrc$)|(^playwright\..*$)|(^e2e\/.*$)|(^tests\/e2e\/.*$)'
+          set -e
+          DIFF=$(git diff --name-only origin/${{ github.base_ref }}...)
+          echo "$DIFF" | egrep -q "$PROTECTED" && (echo "$DIFF" | egrep "$PROTECTED"; exit 1) || true

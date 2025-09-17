@@ -8,21 +8,19 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "dev": "./scripts/dev-all.sh",
-    "dev:collector": "cd apps/collector && pnpm dev",
-    "dev:gateway": "cd apps/gateway && pnpm dev",
-    "dev:sanitizer": "cd apps/sanitizer && pnpm dev",
-    "dev:web": "cd apps/web && pnpm dev",
-    "test:services": "./scripts/test-services.sh",
-    "install:all": "pnpm install"
+    "test": "cross-env NODE_ENV=test vitest run",
+    "test:watch": "cross-env NODE_ENV=test vitest",
+    "test:integration": "cross-env NODE_ENV=test vitest run --dir apps --coverage=false"
   },
   "dependencies": {
     "@fastify/cors": "^8.4.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.13",
-    "@types/pg": "^8.15.5"
+    "@types/node": "^24.5.1",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.6.1",
+    "husky": "^9.1.7",
+    "typescript": "^5.9.2",
+    "vitest": "^2.0.0"
   }
 }
