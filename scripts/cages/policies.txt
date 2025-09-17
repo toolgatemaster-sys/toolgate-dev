@@ -1,0 +1,7 @@
+packages/core
+apps/collector/src
+apps/collector/__tests__
+apps/gateway/src
+apps/gateway/__tests__
+md/day3
+scripts
