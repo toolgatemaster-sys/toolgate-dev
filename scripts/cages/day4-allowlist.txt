@@ -1,0 +1,6 @@
+apps/gateway/src
+apps/gateway/__tests__
+packages/core
+apps/collector/src
+md/day4
+scripts
