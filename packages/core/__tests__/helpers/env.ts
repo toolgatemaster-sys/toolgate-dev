@@ -4,3 +4,6 @@ export function getEnv(name: string, fallback?: string) {
   if (fallback !== undefined) return fallback;
   throw new Error(`Missing env: ${name}`);
 }
+
+// Test client HMAC key for reusability
+export const TEST_CLIENT_HMAC = "dev-client-key";

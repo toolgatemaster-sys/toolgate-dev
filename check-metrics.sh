@@ -36,3 +36,5 @@ check_service "Gateway"   $GATEWAY_PORT   "gateway_http_requests_total"
 check_service "Sanitizer" $SANITIZER_PORT "sanitizer_http_requests_total"
 
 echo "🎉 All metrics endpoints validated successfully."
+
+
