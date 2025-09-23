@@ -84,13 +84,28 @@ function applyProfileRules(
     };
   }
   
+  // Check if approval is required
+  const needsApproval = shouldRequireApproval(profile, request);
+  
+  // Return pending if approval is required, otherwise allow
+  if (needsApproval) {
+    return {
+      decision: 'pending',
+      reason: 'Request requires approval',
+      constraints: { 
+        rate_limited: false,
+        requires_approval: true,
+      },
+    };
+  }
+  
   // Default allow if all checks pass
   return {
     decision: 'allow',
     reason: 'Request allowed by profile rules',
     constraints: { 
       rate_limited: false,
-      requires_approval: shouldRequireApproval(profile, request),
+      requires_approval: false,
     },
   };
 }

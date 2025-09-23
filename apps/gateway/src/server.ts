@@ -7,6 +7,8 @@ import { metricsPlugin } from './metrics.plugin.js';
 import { createPolicyClient } from './policy.client.js';
 import { createPolicyApplicator } from './policy.apply.js';
 import { registerEnforcement } from './policy.enforce.js';
+import { registerApprovalRoutes } from './approvals.routes.js';
+import { startExpiryCron } from './approvals.store.js';
 
 export async function createGateway() {
   const app = fastify({ logger: false });
@@ -67,6 +69,15 @@ export async function createGateway() {
   
   // Policy enforcement hook
   await registerEnforcement(app);
+
+  // Register approval routes
+  await registerApprovalRoutes(app);
+
+  // Start approval expiry cron (every 60 seconds)
+  const expiryInterval = startExpiryCron(60000);
+  app.addHook('onClose', () => {
+    clearInterval(expiryInterval);
+  });
 
   // POST /v1/events -> proxy a collector
   app.post('/v1/events', async (req, reply) => {

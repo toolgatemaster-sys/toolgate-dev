@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { createPolicyClient } from './policy.client.js';
 import { createPolicyApplicator } from './policy.apply.js';
+import { approvalsStore } from './approvals.store.js';
+import { createApprovalContext } from '../../../packages/core/approval.js';
 
 export async function registerEnforcement(app: FastifyInstance) {
   const COLLECTOR_URL = process.env.COLLECTOR_URL;
@@ -13,8 +15,10 @@ export async function registerEnforcement(app: FastifyInstance) {
   const policyApplicator: any = createPolicyApplicator(policyClient);
 
   app.addHook('preHandler', async (req, reply) => {
-    // Skip enforcement for health and metrics
-    if (req.url.startsWith('/healthz') || req.url.startsWith('/metrics')) {
+    // Skip enforcement for health, metrics, and approval routes
+    if (req.url.startsWith('/healthz') || 
+        req.url.startsWith('/metrics') ||
+        req.url.startsWith('/api/approvals')) {
       return;
     }
     try {
@@ -53,7 +57,20 @@ export async function registerEnforcement(app: FastifyInstance) {
       }
 
       if (decision.decision === 'pending') {
-        return reply.code(202).send({ decision: 'pending' });
+        // Create approval for pending decision
+        const approvalCtx = createApprovalContext(req);
+        const approval = approvalsStore.createApproval(
+          approvalCtx,
+          'policy',
+          3600, // default TTL
+          evaluationRequest.context.user_id
+        );
+
+        return reply.code(202).send({ 
+          decision: 'pending',
+          approval_id: approval.id,
+          ttl_seconds: 3600
+        });
       }
 
       // allow → continue
