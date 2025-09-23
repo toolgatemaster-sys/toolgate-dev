@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { createPolicyClient } from './policy.client.js';
 import { createPolicyApplicator } from './policy.apply.js';
 import { approvalsStore } from './approvals.store.js';
-import { createApprovalContext } from '../../../packages/core/approval.js';
+import { createApprovalContext, hashBody } from '../../../packages/core/approval.js';
 
 export async function registerEnforcement(app: FastifyInstance) {
   const COLLECTOR_URL = process.env.COLLECTOR_URL;
@@ -50,6 +50,40 @@ export async function registerEnforcement(app: FastifyInstance) {
         },
       };
 
+      // Check for existing approval by bodyHash (retry/idempotency)
+      const bodyHash = hashBody(body);
+      const existingApproval = approvalsStore.findByBodyHash(bodyHash);
+      
+      if (existingApproval) {
+        // Reuse existing decision
+        switch (existingApproval.status) {
+          case 'approved':
+            // Allow the request
+            (req as any).policyDecision = { decision: 'allow', reason: 'Approved by existing approval' };
+            return; // Continue with the request
+            
+          case 'denied':
+          case 'expired':
+            // Deny the request
+            return reply.code(403).send({ 
+              ok: false, 
+              error: 'Policy violation', 
+              decision: existingApproval.status, 
+              reason: existingApproval.status === 'denied' ? 'Previously denied' : 'Previously expired',
+              approval_id: existingApproval.id
+            });
+            
+          case 'pending':
+            // Return same pending approval
+            return reply.code(202).send({ 
+              decision: 'pending',
+              approval_id: existingApproval.id,
+              ttl_seconds: Math.max(0, Math.floor((existingApproval.expiresAt - Date.now()) / 1000))
+            });
+        }
+      }
+
+      // No existing approval found, apply policy normally
       const decision = await policyApplicator.applyPolicy(evaluationRequest);
 
       if (decision.decision === 'deny') {

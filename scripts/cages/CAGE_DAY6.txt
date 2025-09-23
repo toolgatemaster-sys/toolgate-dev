@@ -1,0 +1,5 @@
+apps/gateway/src
+apps/gateway/__tests__
+packages/core
+md/day6
+scripts

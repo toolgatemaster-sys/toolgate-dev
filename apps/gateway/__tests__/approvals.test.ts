@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, beforeEach, describe, it, expect } from 'vitest';
 import { createGateway } from '../src/server.js';
 
 describe('Gateway Approvals API', () => {
@@ -15,6 +15,12 @@ describe('Gateway Approvals API', () => {
 
   afterAll(async () => {
     try { await gateway?.close(); } catch {}
+  });
+
+  beforeEach(async () => {
+    // Clear the approvals store between tests
+    const { approvalsStore } = await import('../src/approvals.store.js');
+    approvalsStore.clear();
   });
 
   describe('GET /api/approvals', () => {

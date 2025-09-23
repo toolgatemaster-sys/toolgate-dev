@@ -54,6 +54,31 @@ export function createApprovalContext(req: any): Approval['ctx'] {
     domain: body.url ? new URL(body.url).hostname : undefined,
     method: req.method,
     path: url,
-    bodyHash: body ? JSON.stringify(body).slice(0, 100) : undefined,
+    bodyHash: hashBody(body),
   };
+}
+
+/**
+ * Generate a stable hash for request body (for retry/idempotency)
+ */
+export function hashBody(body: unknown): string {
+  if (!body) return 'empty';
+  
+  try {
+    // Recursively sort object keys to ensure consistent ordering
+    const normalized = JSON.stringify(body, (key, value) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const sorted: Record<string, any> = {};
+        Object.keys(value).sort().forEach(k => {
+          sorted[k] = value[k];
+        });
+        return sorted;
+      }
+      return value;
+    });
+    return btoa(normalized).slice(0, 32); // Base64 encode and truncate
+  } catch (error) {
+    // Fallback to string representation if JSON fails
+    return btoa(String(body)).slice(0, 32);
+  }
 }
