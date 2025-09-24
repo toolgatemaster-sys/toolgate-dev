@@ -1,0 +1,5 @@
+apps/web/app
+apps/web/features
+apps/web/__tests__
+md/day7
+scripts
