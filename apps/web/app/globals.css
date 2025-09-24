@@ -1,113 +1,66 @@
-@import "@fontsource/geist-sans/index.css";
-@import "@fontsource/geist-mono/index.css";
-
-@import "./styles/tokens.css";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
-
-/* variables para Tailwind */
-/* después de importar tus tokens.css */
 @layer base {
   :root {
-    --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI,
-      Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
-      "Segoe UI Emoji", "Segoe UI Symbol";
-    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-      Consolas, "Liberation Mono", "Courier New", monospace;
-
-    --background: var(--background-default);
-    --foreground: var(--foreground-default);
-
-    /* Superficies */
-    --card: var(--background-surface-100);
-    --card-foreground: var(--foreground-default);
-
-    --popover: var(--background-surface-100);
-    --popover-foreground: var(--foreground-default);
-
-    /* Marca / Acciones */
-    --primary: var(--brand-default); /* 152.9deg 60% 52.9% */
-    --primary-foreground:var(--foreground-default);
-    
-    --secondary: var(--background-surface-200);
-    --secondary-foreground: var(--foreground-light);
-
-    --muted: var(--background-muted);
-    --muted-foreground: var(--foreground-muted);
-
-    --accent: var(--brand-400);
-    --accent-foreground: var(--foreground-default);
-
-    --destructive: var(--destructive-default); /* rojo de tus tokens */
-    --destructive-foreground: 0 0% 100%;
-
-    /* Bordes / inputs / focus */
-    --border: var(--border-default);
-    --input: var(--border-default);
-    --ring: var(--brand-default);
-
-    /* Sidebar (nuevo en shadcn) */
-    --sidebar: var(--background-dash-sidebar);
-    --sidebar-foreground: var(--foreground-default);
-    --sidebar-primary: var(--brand-default);
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: var(--background-surface-200);
-    --sidebar-accent-foreground: var(--foreground-light);
-    --sidebar-border: var(--border-default);
-    --sidebar-ring: var(--brand-default);
-
-    /* Radios */
-    --radius: 0.625rem;
-  }
-
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem}
   .dark {
-    /* Base (modo oscuro) */
-    --background: var(--background-default);
-    --foreground: var(--foreground-default);
-
-    /* Superficies */
-    --card: var(--background-surface-100);
-    --card-foreground: var(--foreground-default);
-
-    --popover: var(--background-surface-100);
-    --popover-foreground: var(--foreground-default);
-
-    /* Marca / Acciones */
-    --primary: var(--brand-600); /* más brillante en dark */
-    --primary-foreground: var(--foreground-default);
-
-    --secondary: var(--background-surface-300);
-    --secondary-foreground: var(--foreground-default);
-
-    --muted: var(--background-muted);
-    --muted-foreground: var(--foreground-light);
-
-    --accent: var(--colors-brand8);
-    --accent-foreground: var(--foreground-default);
-
-    --destructive: var(--destructive-600);
-    --destructive-foreground: 0 0% 9%;
-
-    /* Bordes / inputs / focus */
-    --border: var(--border-default);
-    --input: var(--border-default);
-    --ring: var(--brand-600);
-
-    /* Sidebar */
-    --sidebar: var(--background-dash-sidebar);
-    --sidebar-foreground: var(--foreground-default);
-    --sidebar-primary: var(--brand-600);
-    --sidebar-primary-foreground: 0 0% 9%;
-    --sidebar-accent: var(--background-surface-200);
-    --sidebar-accent-foreground: var(--foreground-light);
-    --sidebar-border: var(--border-default);
-    --sidebar-ring: var(--brand-600);
-  }
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%}
 }
-* {
-  font-family: var(--font-sans);
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
