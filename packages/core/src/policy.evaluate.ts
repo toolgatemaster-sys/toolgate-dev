@@ -114,18 +114,33 @@ function applyProfileRules(
  * Determine if request requires approval based on profile and context
  */
 function shouldRequireApproval(profile: Profile, request: PolicyEvaluationRequest): boolean {
-  // For Day 3, we'll require approval for high-risk tools or domains
-  const highRiskTools = ['shell.execute', 'file.write', 'database.query'];
-  const highRiskDomains = ['admin.', 'internal.', 'localhost'];
-  
-  if (highRiskTools.includes(request.action.tool)) {
+  // Check profile-specific approval requirements
+  if (profile.tools_require_approval?.includes(request.action.tool)) {
     return true;
   }
   
   if (request.action.url) {
     const url = new URL(request.action.url);
     const domain = url.hostname;
-    if (highRiskDomains.some(risk => domain.includes(risk))) {
+    
+    // Check profile-specific domain approval requirements
+    if (profile.domains_require_approval?.some(risk => domain.includes(risk))) {
+      return true;
+    }
+  }
+  
+  // Fallback to default high-risk tools/domains for backward compatibility
+  const defaultHighRiskTools = ['shell.execute', 'file.write', 'database.query'];
+  const defaultHighRiskDomains = ['admin.', 'internal.', 'localhost'];
+  
+  if (defaultHighRiskTools.includes(request.action.tool)) {
+    return true;
+  }
+  
+  if (request.action.url) {
+    const url = new URL(request.action.url);
+    const domain = url.hostname;
+    if (defaultHighRiskDomains.some(risk => domain.includes(risk))) {
       return true;
     }
   }

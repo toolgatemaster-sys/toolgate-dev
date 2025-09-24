@@ -1,9 +1,11 @@
 // In-memory approvals store for Day 5
 
 import { Approval, ApprovalStatus, genApprovalId, computeExpiresAt, createApprovalContext } from '../../../packages/core/approval.js';
+import { sendNotificationAsync } from './approvals.notify.js';
 
 export class ApprovalsStore {
-  private approvals = new Map<string, Approval>();
+  public approvals = new Map<string, Approval>();
+  public bodyHashIndex = new Map<string, string>(); // bodyHash -> approvalId
 
   /**
    * Create a new approval
@@ -26,6 +28,12 @@ export class ApprovalsStore {
     };
 
     this.approvals.set(approval.id, approval);
+    
+    // Update bodyHash index
+    if (ctx.bodyHash) {
+      this.bodyHashIndex.set(ctx.bodyHash, approval.id);
+    }
+    
     return approval;
   }
 
@@ -34,6 +42,17 @@ export class ApprovalsStore {
    */
   getApproval(id: string): Approval | null {
     return this.approvals.get(id) || null;
+  }
+
+  /**
+   * Find approval by bodyHash (for retry/idempotency)
+   */
+  findByBodyHash(bodyHash: string): Approval | null {
+    const approvalId = this.bodyHashIndex.get(bodyHash);
+    if (!approvalId) {
+      return null;
+    }
+    return this.approvals.get(approvalId) || null;
   }
 
   /**
@@ -75,6 +94,9 @@ export class ApprovalsStore {
       approval.note = note;
     }
 
+    // Send notification
+    sendNotificationAsync(approval);
+
     return approval;
   }
 
@@ -96,6 +118,9 @@ export class ApprovalsStore {
       approval.note = note;
     }
 
+    // Send notification
+    sendNotificationAsync(approval);
+
     return approval;
   }
 
@@ -110,6 +135,9 @@ export class ApprovalsStore {
       if (approval.status === 'pending' && now > approval.expiresAt) {
         approval.status = 'expired';
         expiredCount++;
+        
+        // Send notification for expired approval
+        sendNotificationAsync(approval);
       }
     }
 
@@ -133,6 +161,14 @@ export class ApprovalsStore {
     }
 
     return { total, byStatus };
+  }
+
+  /**
+   * Clear all approvals (for testing)
+   */
+  clear(): void {
+    this.approvals.clear();
+    this.bodyHashIndex.clear();
   }
 }
 

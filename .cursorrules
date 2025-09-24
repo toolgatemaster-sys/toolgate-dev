@@ -1,0 +1,8 @@
+# Cursor Rules — Day 5
+- Only modify/create within: apps/gateway/src, apps/gateway/__tests__, packages/core, md/day5, scripts
+- Implement in-memory approvals + routes
+- Connect enforcement pending -> approval + 202
+- Keep allow/deny logic intact
+- Write tests for approvals
+- Do not touch apps/collector/__tests__
+- No new dependencies

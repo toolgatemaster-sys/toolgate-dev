@@ -10,6 +10,10 @@ export interface Profile {
     rph?: number;
     tokens_per_day?: number;
   };
+  // Tools that require approval for this profile
+  tools_require_approval?: string[];
+  // Domains that require approval for this profile
+  domains_require_approval?: string[];
 }
 
 export interface Policy {
