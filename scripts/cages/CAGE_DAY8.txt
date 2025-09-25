@@ -1,0 +1,6 @@
+apps/web/app
+apps/web/features
+apps/web/components/ui/
+apps/web/__tests__
+md/day8
+scripts
