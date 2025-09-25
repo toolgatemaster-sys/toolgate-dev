@@ -1,214 +1,219 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import type { Approval, ApprovalStatus } from "@/features/approvals/types";
+import { getApprovals, approve, deny, approveMany, denyMany } from "@/features/approvals/api";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
-import type { Approval, ApprovalStatus } from "../../../features/approvals/types";
-import { getApprovals, approve, deny } from "../../../features/approvals/api";
+import ApprovalsDrawer from "./ApprovalsDrawer";
 
-const STATUS_OPTIONS: ApprovalStatus[] = ["pending", "approved", "denied", "expired"];
-
-function fmtTs(ts?: number) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  return d.toLocaleString();
-}
+const REFRESH_MS = 12_000;
 
 export default function ApprovalsTab() {
   const { toast } = useToast();
-  const [status, setStatus] = useState<ApprovalStatus | undefined>("pending");
-  const [agentId, setAgentId] = useState<string>("");
   const [items, setItems] = useState<Approval[]>([]);
+  const [status, setStatus] = useState<ApprovalStatus | "all">("pending");
+  const [agentId, setAgentId] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  async function fetchList() {
+  const params = useMemo(() => ({
+    status: status === "all" ? undefined : status, agentId: agentId || undefined, search: search || undefined, limit: 50
+  }), [status, agentId, search]);
+
+  const selectedIds = Object.entries(selected).filter(([, v]) => v).map(([k]) => k);
+
+  async function refresh() {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const { items } = await getApprovals({ status, agentId: agentId || undefined });
-      setItems(items);
+      const res = await getApprovals(params);
+      setItems(res.items ?? []);
     } catch (e: any) {
-      const msg = e?.message ?? "Failed to load approvals";
-      setError(msg);
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      toast({ title: "Failed to load", description: String(e?.message ?? e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, agentId]);
-
+  useEffect(() => { refresh(); }, [params]);
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(fetchList, 12_000);
+    const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, status, agentId]);
+  }, [autoRefresh, params]);
 
-  async function onApprove(id: string) {
+  function rowStatusBadge(s: ApprovalStatus) {
+    const variant = s === "pending" ? "secondary" : s === "approved" ? "default" : s === "denied" ? "destructive" : "outline";
+    return <Badge variant={variant}>{s}</Badge>;
+  }
+
+  async function onApprove(id: string, note?: string) {
     try {
-      await approve(id);
-      toast({ title: "Approved", description: id });
-      fetchList();
+      await approve(id, note);
+      toast({ title: "Approved", description: `Approval ${id} approved` });
+      refresh();
     } catch (e: any) {
-      toast({ title: "Approve failed", description: e?.message ?? "Error", variant: "destructive" });
+      toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
     }
   }
 
-  async function onDeny(id: string) {
+  async function onDeny(id: string, note?: string) {
     try {
-      await deny(id);
-      toast({ title: "Denied", description: id });
-      fetchList();
+      await deny(id, note);
+      toast({ title: "Denied", description: `Approval ${id} denied` });
+      refresh();
     } catch (e: any) {
-      toast({ title: "Deny failed", description: e?.message ?? "Error", variant: "destructive" });
+      toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
     }
   }
 
-  const rows = useMemo(() => items, [items]);
+  async function onBulk(kind: "approve" | "deny") {
+    if (selectedIds.length === 0) return;
+    try {
+      if (kind === "approve") await approveMany(selectedIds);
+      else await denyMany(selectedIds);
+      toast({ title: kind === "approve" ? "Approved" : "Denied", description: `${selectedIds.length} items` });
+      setSelected({});
+      refresh();
+    } catch (e: any) {
+      toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
+    }
+  }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
+    <div className="space-y-4 p-6">
+      <Card>
+        <CardHeader>
           <CardTitle>Approvals</CardTitle>
-          <CardDescription>Review and act on pending requests from your agents.</CardDescription>
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Mantener etiqueta 'Status' para compat con tests Day 7 */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm">Status</span>
+              <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+                <SelectTrigger className="w-[160px]" aria-label="Status">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all</SelectItem>
+                  <SelectItem value="pending">pending</SelectItem>
+                  <SelectItem value="approved">approved</SelectItem>
+                  <SelectItem value="denied">denied</SelectItem>
+                  <SelectItem value="expired">expired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-          {/* Status filter */}
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Status</Label>
-            <Select value={status} onValueChange={(v: ApprovalStatus) => setStatus(v)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">Agent</span>
+              <Input placeholder="agentId" value={agentId} onChange={(e) => setAgentId(e.target.value)} className="w-[200px]" />
+            </div>
+
+            <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-[240px]" />
+
+            <div className="ml-auto flex items-center gap-2">
+              <label className="text-sm flex items-center gap-2">
+                <span>Auto-refresh</span>
+                <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label="Auto-refresh" />
+              </label>
+              <Button variant="outline" onClick={refresh} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
+            </div>
           </div>
 
-          {/* Agent filter */}
+          {/* Acciones bulk */}
           <div className="flex items-center gap-2">
-            <Label className="text-sm">Agent</Label>
-            <Input
-              placeholder="agentId"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-              className="w-[180px]"
-            />
+            <Button variant="outline" disabled={selectedIds.length === 0} onClick={() => onBulk("approve")}>Approve selected</Button>
+            <Button variant="outline" disabled={selectedIds.length === 0} onClick={() => onBulk("deny")}>Deny selected</Button>
+            {selectedIds.length > 0 && <span className="text-sm text-muted-foreground">{selectedIds.length} selected</span>}
           </div>
 
-          {/* Auto refresh */}
-          <div className="flex items-center gap-2">
-            <Switch id="auto" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
-            <Label htmlFor="auto" className="text-sm">
-              Auto-refresh
-            </Label>
-          </div>
+          <Separator />
 
-          {/* Manual refresh */}
-          <Button onClick={fetchList} disabled={loading}>
-            Refresh
-          </Button>
-        </div>
-      </CardHeader>
-
-      <Separator />
-
-      <CardContent className="pt-4">
-        {error && <div className="text-sm text-destructive mb-3">Failed to load: {error}</div>}
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Agent</TableHead>
-                <TableHead>Tool</TableHead>
-                <TableHead>Domain</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
+          {/* Tabla */}
+          <div className="overflow-hidden rounded-xl border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                    No approvals found.
-                  </TableCell>
+                  <TableHead className="w-10">
+                    <input
+                      aria-label="Select all"
+                      type="checkbox"
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const next: Record<string, boolean> = {};
+                        if (checked) items.forEach((it) => next[it.id] = true);
+                        setSelected(next);
+                      }}
+                      checked={items.length > 0 && items.every((it) => selected[it.id])}
+                    />
+                  </TableHead>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Domain</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-mono text-xs">{row.id}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          row.status === "pending"
-                            ? "default"
-                            : row.status === "approved"
-                            ? "secondary"
-                            : row.status === "denied"
-                            ? "destructive"
-                            : "outline"
-                        }
-                      >
-                        {row.status}
-                      </Badge>
+              </TableHeader>
+              <TableBody>
+                {items.map((a) => (
+                  <TableRow key={a.id} className="cursor-pointer" onClick={() => setOpenId(a.id)}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        aria-label={`Select ${a.id}`}
+                        type="checkbox"
+                        checked={!!selected[a.id]}
+                        onChange={(e) => setSelected((s) => ({ ...s, [a.id]: e.target.checked }))}
+                      />
                     </TableCell>
-                    <TableCell className="text-xs">{row.agentId ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{row.ctx?.tool ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{row.ctx?.domain ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{fmtTs(row.createdAt)}</TableCell>
-                    <TableCell className="text-xs">{fmtTs(row.expiresAt)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell><code className="text-xs">{a.id}</code></TableCell>
+                    <TableCell>{rowStatusBadge(a.status)}</TableCell>
+                    <TableCell className="text-muted-foreground">{a.agentId}</TableCell>
+                    <TableCell className="truncate">{a.ctx?.tool || a.action || "—"}</TableCell>
+                    <TableCell className="truncate">{a.ctx?.domain || "—"}</TableCell>
+                    <TableCell>{new Date(a.createdAt).toLocaleString()}</TableCell>
+                    <TableCell>{a.expiresAt ? new Date(a.expiresAt).toLocaleString() : "—"}</TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => onApprove(row.id)}
-                          disabled={loading || row.status !== "pending"}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => onDeny(row.id)}
-                          disabled={loading || row.status !== "pending"}
-                        >
-                          Deny
-                        </Button>
+                        <Button data-testid={`approve-${a.id}`} size="sm" variant="outline" disabled={a.status !== "pending"} onClick={() => onApprove(a.id)}>Approve</Button>
+                        <Button data-testid={`deny-${a.id}`} size="sm" variant="outline" disabled={a.status !== "pending"} onClick={() => onDeny(a.id)}>Deny</Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+                ))}
+                {items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">No approvals found.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Drawer */}
+      <ApprovalsDrawer
+        id={openId}
+        open={!!openId}
+        onOpenChange={(o) => !o && setOpenId(null)}
+        onAfterAction={refresh}
+      />
+    </div>
   );
 }

@@ -58,11 +58,13 @@ describe("ApprovalsTab", () => {
   it("renders filters, buttons, and table headers", async () => {
     render(<ApprovalsTab />);
     
-    // Check filters
-    expect(screen.getAllByText("Status")).toHaveLength(2); // Filter label + table header
-    expect(screen.getAllByText("Agent")).toHaveLength(2); // Filter label + table header
-    expect(screen.getByText("Auto-refresh")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    // Wait for component to finish loading and check filters
+    await waitFor(() => {
+      expect(screen.getAllByText("Status")).toHaveLength(2); // Filter label + table header
+      expect(screen.getAllByText("Agent")).toHaveLength(2); // Filter label + table header
+      expect(screen.getByText("Auto-refresh")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    });
     
     // Check table headers
     await waitFor(() => {
@@ -91,7 +93,12 @@ describe("ApprovalsTab", () => {
     });
     
     await waitFor(() => {
-      expect(getApprovals).toHaveBeenCalledWith({ status: "approved", agentId: undefined });
+      expect(getApprovals).toHaveBeenCalledWith({ 
+        status: "approved", 
+        agentId: undefined, 
+        limit: 50, 
+        search: undefined 
+      });
     });
   });
 
@@ -102,7 +109,12 @@ describe("ApprovalsTab", () => {
     fireEvent.change(agentInput, { target: { value: "agent123" } });
     
     await waitFor(() => {
-      expect(getApprovals).toHaveBeenCalledWith({ status: "pending", agentId: "agent123" });
+      expect(getApprovals).toHaveBeenCalledWith({ 
+        status: "pending", 
+        agentId: "agent123", 
+        limit: 50, 
+        search: undefined 
+      });
     });
   });
 
@@ -123,7 +135,7 @@ describe("ApprovalsTab", () => {
       fireEvent.click(enabledApproveButton);
       
       await waitFor(() => {
-        expect(approve).toHaveBeenCalledWith("apr_123");
+        expect(approve).toHaveBeenCalledWith("apr_123", undefined);
         expect(mockToast).toHaveBeenCalled();
         expect(getApprovals).toHaveBeenCalledTimes(2); // Initial load + refetch after approve
       });
@@ -147,7 +159,7 @@ describe("ApprovalsTab", () => {
       fireEvent.click(enabledDenyButton);
       
       await waitFor(() => {
-        expect(deny).toHaveBeenCalledWith("apr_123");
+        expect(deny).toHaveBeenCalledWith("apr_123", undefined);
         expect(mockToast).toHaveBeenCalled();
         expect(getApprovals).toHaveBeenCalledTimes(2); // Initial load + refetch after deny
       });
@@ -175,7 +187,11 @@ describe("ApprovalsTab", () => {
     render(<ApprovalsTab />);
     
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load/i)).toBeInTheDocument();
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Failed to load",
+        description: "Network error",
+        variant: "destructive"
+      });
     });
   });
 
