@@ -1,11 +1,4 @@
-# ===== PR Day 8: UI Approvals (Drawer, notes, bulk) =====
-set -euo pipefail
 
-# 0) Asegúrate de estar en la rama de Day 8 (cámbiala si tu rama tiene otro nombre)
-git checkout day8/ui-approvals-drawer
-
-# 1) PR body (auto) — genera un archivo temporal con el contenido del PR
-cat > /tmp/PR_DAY8_BODY.md <<'MD'
 ## What
 Day 8 — UI Approvals Phase 2:
 - Drawer de detalle (Sheet) con metadata del approval.
