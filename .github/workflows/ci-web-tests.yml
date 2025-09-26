@@ -9,23 +9,27 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Evita llamadas reales y latencia en tests
+      NEXT_PUBLIC_TOOLGATE_MOCK: "1"
+      NODE_ENV: "development"
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "pnpm"
 
-      - name: Set up pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 9
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prod=false
 
-      - name: Run tests (apps/web)
+      - name: Run web tests
         run: pnpm --filter ./apps/web test -- --run
