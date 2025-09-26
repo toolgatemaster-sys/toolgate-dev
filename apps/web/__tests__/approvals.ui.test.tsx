@@ -114,8 +114,8 @@ describe("ApprovalsTab", () => {
     });
     
     // Import dinámico después del mock
-    const module = await import("../app/(dashboard)/approvals/ApprovalsTab");
-    ApprovalsTab = module.default;
+    const moduleImport = await import("../app/(dashboard)/approvals/ApprovalsTab");
+    ApprovalsTab = moduleImport.default;
   });
 
   afterEach(() => {
