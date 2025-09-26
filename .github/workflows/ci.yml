@@ -30,6 +30,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+      - run: pnpm store prune
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --filter ./apps/web typecheck
 
@@ -45,6 +46,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+      - run: pnpm store prune
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --filter ./apps/web lint
 
@@ -60,6 +62,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+      - run: pnpm store prune
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --filter ./apps/web test:ci
 
@@ -78,5 +81,6 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+      - run: pnpm store prune
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --filter ./apps/web build

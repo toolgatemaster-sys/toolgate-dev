@@ -6,3 +6,6 @@ export * from './policy.parser.js';
 
 // Policy evaluation
 export * from './policy.evaluate.js';
+
+// Analysis functions
+export * from './analysis.js';
