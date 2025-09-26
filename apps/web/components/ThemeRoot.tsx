@@ -19,10 +19,10 @@ export default function ThemeRoot({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="fixed right-4 top-4 flex gap-2">
-        <Button variant="outlineSupabase" size="tiny" onClick={() => setT("light")}>
+        <Button variant="outline" size="sm" onClick={() => setT("light")}>
           Light
         </Button>
-        <Button variant="brandSupabase" size="tiny" onClick={() => setT("dark")}>Dark</Button>
+        <Button variant="default" size="sm" onClick={() => setT("dark")}>Dark</Button>
       </div>
       {children}
     </div>

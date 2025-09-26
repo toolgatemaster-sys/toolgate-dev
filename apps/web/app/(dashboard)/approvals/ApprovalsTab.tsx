@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Approval, ApprovalStatus } from "@/features/approvals/types";
 import { getApprovals, approve, deny, approveMany, denyMany } from "@/features/approvals/api";
 
@@ -34,7 +34,7 @@ export default function ApprovalsTab() {
 
   const selectedIds = Object.entries(selected).filter(([, v]) => v).map(([k]) => k);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getApprovals(params);
@@ -44,14 +44,14 @@ export default function ApprovalsTab() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [params, toast]);
 
-  useEffect(() => { refresh(); }, [params]);
+  useEffect(() => { refresh(); }, [params, refresh]);
   useEffect(() => {
     if (!autoRefresh) return;
     const id = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(id);
-  }, [autoRefresh, params]);
+  }, [autoRefresh, params, refresh]);
 
   function rowStatusBadge(s: ApprovalStatus) {
     const variant = s === "pending" ? "secondary" : s === "approved" ? "default" : s === "denied" ? "destructive" : "outline";
