@@ -1,15 +1,18 @@
-## What
-Add tests for ApprovalsTab (Day 7).
+## Qué cambia
+- [ ] UI: Approvals/Metrics/Drawer
+- [ ] Fix de tests
+- [ ] Build/Config
 
-## Why
-Protect core UI behavior (filters, approve/deny, auto-refresh, empty/error states).
+## Cómo se probó
+- [ ] `pnpm typecheck`
+- [ ] `pnpm lint`
+- [ ] `pnpm test:ci` (adjunta cobertura si aplica)
+- [ ] `pnpm -w build`
 
-## Scope
-- ✅ New tests only (no runtime logic changes)
-- ✅ Vitest + RTL
-- ✅ Stable mocks and fake timers
+## Screenshots / Capturas
+(agrega imágenes del ApprovalsTab + Metrics cards)
 
-## Checks
-- [ ] `web-tests` CI green
-- [ ] Conventional commit title
-- [ ] No prod deps added
+## Checklist
+- [ ] Sin breaking changes
+- [ ] Docs actualizadas (`md/day09/README.md`)
+- [ ] Coverage ≥ umbrales
