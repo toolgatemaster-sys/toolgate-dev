@@ -10,11 +10,7 @@
   "scripts": {
     "test": "cross-env NODE_ENV=test vitest run",
     "test:watch": "cross-env NODE_ENV=test vitest",
-    "test:integration": "cross-env NODE_ENV=test vitest run --dir apps --coverage=false",
-    "test:ci": "vitest run --coverage --reporter=dot",
-    "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "pnpm -r --filter ./apps/web build"
+    "test:integration": "cross-env NODE_ENV=test vitest run --dir apps --coverage=false"
   },
   "dependencies": {
     "@fastify/cors": "^8.4.0"
