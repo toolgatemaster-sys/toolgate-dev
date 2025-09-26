@@ -3,7 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [ master ]
-    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [ master ]
 
@@ -24,14 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter ./apps/web typecheck
 
@@ -40,14 +39,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter ./apps/web lint
 
@@ -56,14 +55,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter ./apps/web test:ci
 
@@ -75,13 +74,13 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter ./apps/web build
