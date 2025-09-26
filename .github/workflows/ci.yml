@@ -25,20 +25,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Enable corepack (pnpm)
-        run: corepack enable
-
       - name: Setup pnpm 9
         uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
 
       - name: Install deps
         run: pnpm -w install --frozen-lockfile
@@ -51,13 +48,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9, run_install: false }
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: corepack enable
-      - uses: pnpm/action-setup@v4
-        with: { version: 9, run_install: false }
       - name: Install deps
         run: pnpm -w install --frozen-lockfile
       - name: Lint
@@ -68,13 +64,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9, run_install: false }
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: corepack enable
-      - uses: pnpm/action-setup@v4
-        with: { version: 9, run_install: false }
       - name: Install deps
         run: pnpm -w install --frozen-lockfile
       - name: Run tests
@@ -88,13 +83,12 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9, run_install: false }
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: corepack enable
-      - uses: pnpm/action-setup@v4
-        with: { version: 9, run_install: false }
       - name: Install deps
         run: pnpm -w install --frozen-lockfile
       - name: Build
