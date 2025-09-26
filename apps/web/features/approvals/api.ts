@@ -133,10 +133,3 @@ export async function denyMany(ids: string[], note?: string) {
   }
   for (const id of ids) await deny(id, note);
 }
-
-// Test helper to set mock items (only available in test environment)
-export const __setMockItems = (items: Approval[]) => {
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'test') {
-    __MOCK_ITEMS = items;
-  }
-};

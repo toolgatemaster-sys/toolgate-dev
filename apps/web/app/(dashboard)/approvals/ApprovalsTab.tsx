@@ -28,40 +28,17 @@ export default function ApprovalsTab() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [openId, setOpenId] = useState<string | null>(null);
 
-  // ---- Day 9: métricas (pending/approved/denied) ----
-  const [metrics, setMetrics] = useState({ pending: 0, approved: 0, denied: 0 });
-
   const params = useMemo(() => ({
-    status: status === "all" ? undefined : status,
-    agentId: agentId || undefined,
-    search: search || undefined,
-    limit: 50,
+    status: status === "all" ? undefined : status, agentId: agentId || undefined, search: search || undefined, limit: 50
   }), [status, agentId, search]);
 
   const selectedIds = Object.entries(selected).filter(([, v]) => v).map(([k]) => k);
-
-  async function refreshMetrics() {
-    // las métricas son globales (no filtran por agent/search) para tener “overview”
-    // si prefieres que respeten filtros, pasa { agentId, search } aquí también
-    const [p, a, d] = await Promise.all([
-      getApprovals({ status: "pending", limit: 1_000 }),
-      getApprovals({ status: "approved", limit: 1_000 }),
-      getApprovals({ status: "denied",  limit: 1_000 }),
-    ]);
-    setMetrics({
-      pending: p.items?.length ?? 0,
-      approved: a.items?.length ?? 0,
-      denied:  d.items?.length ?? 0,
-    });
-  }
 
   async function refresh() {
     setLoading(true);
     try {
       const res = await getApprovals(params);
       setItems(res.items ?? []);
-      // actualizar métricas en cada refresh “de pantalla”
-      refreshMetrics().catch(() => {});
     } catch (e: any) {
       toast({ title: "Failed to load", description: String(e?.message ?? e), variant: "destructive" });
     } finally {
@@ -69,12 +46,7 @@ export default function ApprovalsTab() {
     }
   }
 
-  useEffect(() => { 
-    refresh(); 
-    // primera carga de métricas por si no hay items con el filtro actual
-    refreshMetrics().catch(() => {});
-  }, [params]);
-
+  useEffect(() => { refresh(); }, [params]);
   useEffect(() => {
     if (!autoRefresh) return;
     const id = setInterval(refresh, REFRESH_MS);
@@ -82,10 +54,7 @@ export default function ApprovalsTab() {
   }, [autoRefresh, params]);
 
   function rowStatusBadge(s: ApprovalStatus) {
-    const variant = s === "pending" ? "secondary"
-                  : s === "approved" ? "default"
-                  : s === "denied" ? "destructive"
-                  : "outline";
+    const variant = s === "pending" ? "secondary" : s === "approved" ? "default" : s === "denied" ? "destructive" : "outline";
     return <Badge variant={variant}>{s}</Badge>;
   }
 
@@ -93,7 +62,7 @@ export default function ApprovalsTab() {
     try {
       await approve(id, note);
       toast({ title: "Approved", description: `Approval ${id} approved` });
-      await refresh();
+      refresh();
     } catch (e: any) {
       toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
     }
@@ -103,7 +72,7 @@ export default function ApprovalsTab() {
     try {
       await deny(id, note);
       toast({ title: "Denied", description: `Approval ${id} denied` });
-      await refresh();
+      refresh();
     } catch (e: any) {
       toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
     }
@@ -116,7 +85,7 @@ export default function ApprovalsTab() {
       else await denyMany(selectedIds);
       toast({ title: kind === "approve" ? "Approved" : "Denied", description: `${selectedIds.length} items` });
       setSelected({});
-      await refresh();
+      refresh();
     } catch (e: any) {
       toast({ title: "Error", description: String(e?.message ?? e), variant: "destructive" });
     }
@@ -124,29 +93,6 @@ export default function ApprovalsTab() {
 
   return (
     <div className="space-y-4 p-6">
-      {/* ---- Day 9: métricas arriba ---- */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">Pending: {metrics.pending}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm font-medium">Approved</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">Approved: {metrics.approved}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm font-medium">Denied</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">Denied: {metrics.denied}</CardContent>
-        </Card>
-      </div>
-
-      {/* ---- Card principal (filtros + acciones + tabla) ---- */}
       <Card>
         <CardHeader>
           <CardTitle>Approvals</CardTitle>

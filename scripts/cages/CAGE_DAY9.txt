@@ -1,9 +1,0 @@
-apps/web/app
-apps/web/hooks
-apps/web/lib
-apps/web/features
-apps/web/components/ui/
-apps/web/__tests__
-md/day9
-scripts
-
