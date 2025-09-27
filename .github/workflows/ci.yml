@@ -31,7 +31,6 @@ jobs:
           node-version: 20
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @toolgate/core build
       - run: pnpm --filter ./apps/web typecheck
 
   lint:
