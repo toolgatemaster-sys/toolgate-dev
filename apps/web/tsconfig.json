@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@toolgate/core": [
+        "../../packages/core/src/index.ts"
       ]
     },
     "target": "ES2017"
