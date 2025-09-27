@@ -1,4 +1,4 @@
-import { Policy, validatePolicy } from './policy.schema.js';
+import { Policy, validatePolicy } from './policy.schema';
 
 /**
  * Parse YAML policy content into validated Policy object

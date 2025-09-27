@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, Policy } from '../dist/policy.evaluate.js';
+import { evaluate, Policy } from '../src/policy.evaluate';
 
 describe('Policy Evaluation', () => {
   const samplePolicy: Policy = {

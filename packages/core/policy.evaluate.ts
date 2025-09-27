@@ -4,7 +4,7 @@ import {
   PolicyEvaluationRequest, 
   PolicyEvaluationResult,
   validatePolicyEvaluationRequest 
-} from './policy.schema.js';
+} from './policy.schema';
 
 /**
  * Evaluate a policy against a request to determine allow/deny/pending
