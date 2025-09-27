@@ -1,11 +1,11 @@
 // Policy schemas and types
-export * from './policy.schema.js';
+export * from './policy.schema';
 
 // Policy parsing
-export * from './policy.parser.js';
+export * from './policy.parser';
 
 // Policy evaluation
-export * from './policy.evaluate.js';
+export * from './policy.evaluate';
 
 // Analysis functions
-export * from './analysis.js';
+export * from './analysis';
