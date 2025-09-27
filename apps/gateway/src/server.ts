@@ -1,5 +1,12 @@
-import { setDefaultResultOrder } from 'dns';
-setDefaultResultOrder('ipv4first');
+// Set DNS result order for IPv4 preference (safe for all environments)
+try {
+  const { setDefaultResultOrder } = await import('node:dns');
+  if (typeof setDefaultResultOrder === 'function') {
+    setDefaultResultOrder('ipv4first');
+  }
+} catch {
+  // No-op in environments where node:dns is not available (e.g., some test environments)
+}
 import fastify from 'fastify';
 import { z } from 'zod';
 import cors from '@fastify/cors';
