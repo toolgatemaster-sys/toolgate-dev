@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validatePolicy, validatePolicyEvaluationRequest, Policy } from '../dist/policy.schema.js';
+import { validatePolicy, validatePolicyEvaluationRequest, Policy } from '../src/policy.schema';
 
 describe('Policy Schema Validation', () => {
   describe('validatePolicy', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defangLinks, spotlight, analyze, hmacSign, hmacVerify, safeEqual } from '../src/index.js';
+import { defangLinks, spotlight, analyze, hmacSign, hmacVerify, safeEqual } from '../src/index';
 
 describe('@toolgate/core', () => {
   describe('defangLinks', () => {
